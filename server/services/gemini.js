@@ -71,11 +71,11 @@ RESPONSE FORMAT — return ONLY valid JSON:
   while (attempts < 2) {
     try {
       attempts++;
-      log('info', `[Gemini] Querying gemini-1.5-flash (Attempt ${attempts}/2)...`);
+      log('info', `[Gemini] Querying gemini-3.1-flash-lite (Attempt ${attempts}/2)...`);
 
       // Initialize the model with the system instructions and JSON output mode
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-3.1-flash-lite',
         systemInstruction: systemInstruction,
         generationConfig: {
           responseMimeType: 'application/json',

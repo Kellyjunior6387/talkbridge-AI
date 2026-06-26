@@ -6,7 +6,6 @@ import Navbar from "@/components/Navbar";
 import MessageStream from "@/components/MessageStream";
 import HowItWorks from "@/components/HowItWorks";
 import FeaturesGrid from "@/components/FeaturesGrid";
-import TechStack from "@/components/TechStack";
 import DemoCTA from "@/components/DemoCTA";
 import Footer from "@/components/Footer";
 
@@ -64,7 +63,7 @@ export default function Home() {
               variants={heroItemVariants}
               className="font-mono text-xs md:text-sm font-bold uppercase tracking-widest text-primary mb-5"
             >
-              AI Communication Bridge Hackathon 2026
+              Every comment. On auto-pilot.
             </motion.div>
 
             {/* Title */}
@@ -72,9 +71,9 @@ export default function Home() {
               variants={heroItemVariants}
               className="font-display font-black text-4xl sm:text-6xl md:text-7xl leading-[1.05] tracking-tight text-textPrimary mb-6"
             >
-              Every message.
+              Manage social comments
               <span className="block bg-gradient-to-r from-primary via-primary to-secondary bg-clip-text text-transparent pb-2">
-                One inbox.
+                using AI.
               </span>
             </motion.h1>
 
@@ -84,8 +83,8 @@ export default function Home() {
               className="text-textSecondary font-body text-base md:text-lg leading-relaxed mb-10 max-w-[480px]"
             >
               TalkBridge unifies TikTok, Instagram, WhatsApp, and SMS into a single 
-              AI-powered conversation layer — so brands never miss a comment, complaint, 
-              or customer again.
+              intelligent inbox — automatically classifying intent, drafting response suggestions, 
+              and escalating urgent leads in real-time.
             </motion.p>
 
             {/* Call to Actions */}
@@ -94,19 +93,17 @@ export default function Home() {
               className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mb-12"
             >
               <a
-                href="#how-it-works"
-                onClick={handleScrollToHowItWorks}
+                href="/auth"
                 className="w-full sm:w-auto px-7 py-3.5 rounded-full bg-primary text-background font-display font-bold text-sm tracking-wide text-center shadow-[0_0_15px_rgba(77,255,195,0.3)] hover:shadow-[0_0_25px_rgba(77,255,195,0.5)] transition-all duration-300 hover:scale-[1.03]"
               >
-                See How It Works
+                Get Started Now
               </a>
               <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="#how-it-works"
+                onClick={handleScrollToHowItWorks}
                 className="w-full sm:w-auto px-7 py-3.5 rounded-full border border-border hover:border-textSecondary/40 text-textPrimary font-display font-bold text-sm tracking-wide text-center bg-surface/30 hover:bg-surface/60 transition-all duration-300 hover:scale-[1.03]"
               >
-                View on GitHub
+                See How It Works
               </a>
             </motion.div>
 
@@ -116,18 +113,18 @@ export default function Home() {
               className="flex flex-wrap items-center justify-center lg:justify-start gap-y-3 gap-x-6 text-[11px] font-mono tracking-wider text-textSecondary border-t border-border/30 pt-8 w-full"
             >
               <span className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#E0B88A]" />
-                Powered by Claude AI
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                10M+ COMMENTS PROCESSED
               </span>
               <span className="text-border/60 hidden sm:inline">·</span>
               <span className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
-                Built with Zernio
+                REAL-TIME SYNC
               </span>
               <span className="text-border/60 hidden sm:inline">·</span>
               <span className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#FFB347]" />
-                ElevenLabs Voice
+                <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                ENTERPRISE-GRADE AI
               </span>
             </motion.div>
           </motion.div>
@@ -150,9 +147,6 @@ export default function Home() {
 
       {/* FEATURES GRID SECTION */}
       <FeaturesGrid />
-
-      {/* TECH STACK SECTION */}
-      <TechStack />
 
       {/* DEMO CTA SECTION */}
       <DemoCTA />

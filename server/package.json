@@ -13,6 +13,7 @@
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
-    "twilio": "latest"
+    "twilio": "latest",
+    "ws": "latest"
   }
 }

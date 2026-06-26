@@ -27,8 +27,8 @@ export default function DemoCTA() {
 
   return (
     <section className="py-32 relative overflow-hidden bg-background border-t border-border/40">
-      {/* Premium Violet Radial Gradient */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(123,110,246,0.18)_0%,transparent_70%)] pointer-events-none z-0" />
+      {/* Premium Radial Gradient */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(77,255,195,0.08)_0%,transparent_70%)] pointer-events-none z-0" />
 
       {/* Grid Overlay for Texture */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(28,38,64,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(28,38,64,0.15)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none z-0 opacity-40" />
@@ -36,30 +36,28 @@ export default function DemoCTA() {
       <div className="max-w-7xl mx-auto px-6 text-center relative z-10">
         {/* Title */}
         <h2 className="font-display font-black text-4xl md:text-6xl text-textPrimary mb-4 tracking-tight leading-tight">
-          See TalkBridge in action.
+          Ready to automate your social inbox?
         </h2>
 
         {/* Subtitle */}
         <p className="font-mono text-xs md:text-sm text-textSecondary uppercase tracking-widest mb-10 max-w-xl mx-auto">
-          June 27, 2026 · AI Communication Bridge Hackathon · BrickLabs AI
+          Get started in 2 minutes · No credit card required · Free trial
         </p>
 
         {/* Action Buttons Row */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
           <a
-            href="https://bit.ly/aibridgehackathon"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/auth"
             className="w-full sm:w-auto px-8 py-4 rounded-full bg-primary text-background font-display font-bold text-base tracking-wide shadow-[0_0_20px_rgba(77,255,195,0.4)] hover:shadow-[0_0_30px_rgba(77,255,195,0.6)] transition-all duration-300 hover:scale-[1.03]"
           >
-            Register at bit.ly/aibridgehackathon
+            Get Started Now
           </a>
           <a
             href="#hero"
             onClick={handleWatchDemoClick}
             className="w-full sm:w-auto px-8 py-4 rounded-full border border-border/80 text-textPrimary font-display font-bold text-base tracking-wide hover:bg-surface hover:border-textSecondary/30 transition-all duration-300 hover:scale-[1.03]"
           >
-            Watch Demo
+            Back to Top
           </a>
         </div>
 

@@ -108,3 +108,53 @@ export async function schedulePublicStatement(content, scheduledFor) {
     throw new Error(`Zernio schedule failed: ${err.message}`);
   }
 }
+
+/**
+ * Publishes a reply directly to a specific comment (e.g., an Instagram comment)
+ * Matches Zernio REST API reference: POST /v1/inbox/comments/{postId}
+ * @param {string} replyText - The reply content
+ * @param {string} accountId - The Zernio account ID
+ * @param {string} commentId - The original platform comment ID
+ * @param {string} postId - The Zernio post ID
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function publishCommentReply(replyText, accountId, commentId, postId) {
+  try {
+    const apiKey = process.env.ZERNIO_API_KEY;
+    if (!apiKey) {
+      throw new Error('Zernio API key is missing from environment variables');
+    }
+
+    if (!postId) {
+      throw new Error('Missing required postId parameter for Zernio comment reply');
+    }
+
+    log('info', `[Zernio] Replying to comment ${commentId} on post ${postId} using account ${accountId} via REST API...`);
+    
+    const url = `https://zernio.com/api/v1/inbox/comments/${postId}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        accountId,
+        message: replyText,
+        commentId
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Zernio API returned status ${response.status}: ${errText}`);
+    }
+
+    const resData = await response.json();
+    log('info', `[Zernio] Direct comment reply published successfully. Response: ${JSON.stringify(resData)}`);
+    return resData.success || true;
+  } catch (err) {
+    log('error', `[Zernio] publishCommentReply failed: ${err.message}`);
+    throw new Error(`Zernio comment reply failed: ${err.message}`);
+  }
+}

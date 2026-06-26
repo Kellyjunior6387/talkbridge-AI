@@ -95,12 +95,10 @@ export default function Navbar() {
         {/* Action Button (Desktop) */}
         <div className="hidden md:block">
           <a
-            href="https://bit.ly/aibridgehackathon"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/auth"
             className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full border border-primary/80 text-primary text-sm font-semibold font-display tracking-wide hover:bg-primary hover:text-background transition-all duration-300 hover:shadow-[0_0_15px_rgba(77,255,195,0.3)]"
           >
-            Register for Hackathon <span className="text-xs">→</span>
+            Sign In <span className="text-xs">→</span>
           </a>
         </div>
 
@@ -131,13 +129,11 @@ export default function Navbar() {
           </nav>
           <hr className="border-border/40" />
           <a
-            href="https://bit.ly/aibridgehackathon"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/auth"
             onClick={() => setIsMobileMenuOpen(false)}
             className="flex items-center justify-center gap-1.5 w-full py-3 rounded-full border border-primary text-primary text-sm font-semibold font-display text-center hover:bg-primary hover:text-background transition-all duration-300"
           >
-            Register for Hackathon →
+            Sign In →
           </a>
         </div>
       )}

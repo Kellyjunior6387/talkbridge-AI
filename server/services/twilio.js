@@ -29,16 +29,10 @@ export async function escalateToAgent({
     }
 
     const body = [
-      `🚨 TalkBridge Alert — Urgency ${urgency}/10`,
-      `Platform: ${platform.toUpperCase()}`,
-      `From: @${authorUsername}`,
-      `Message: "${messageText}"`,
-      `Intent: ${intent}`,
-      `---`,
-      `AI Draft Reply:`,
-      `"${aiReply}"`,
-      `---`,
-      `Reply YES to approve this reply, or handle manually.`
+      `🚨 TB [U:${urgency}] @${authorUsername}`,
+      `Msg: "${messageText.slice(0, 40)}${messageText.length > 40 ? '...' : ''}"`,
+      `Draft: "${aiReply.slice(0, 40)}${aiReply.length > 40 ? '...' : ''}"`,
+      `Reply YES to approve`
     ].join('\n');
 
     const response = await client.messages.create({
