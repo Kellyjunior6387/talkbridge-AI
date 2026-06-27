@@ -26,6 +26,8 @@ import {
   X
 } from "lucide-react";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+
 // Types
 interface Message {
   id: string;
@@ -177,7 +179,7 @@ export default function DashboardPage() {
   const fetchMessages = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true);
     try {
-      const res = await fetch("http://localhost:4000/test/messages", {
+      const res = await fetch(`${BACKEND_URL}/test/messages`, {
         headers: { "Cache-Control": "no-cache" }
       });
       if (res.ok) {
@@ -218,7 +220,7 @@ export default function DashboardPage() {
 
     try {
       if (isBackendOnline) {
-        const res = await fetch("http://localhost:4000/test/simulate", {
+        const res = await fetch(`${BACKEND_URL}/test/simulate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
