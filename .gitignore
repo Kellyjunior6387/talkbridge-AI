@@ -12,6 +12,8 @@
 # next.js
 /.next/
 /out/
+/frontend/.next/
+/frontend/out/
 
 # production
 /build
@@ -27,6 +29,7 @@ yarn-error.log*
 
 # local env files
 .env*.local
+/frontend/.env*.local
 
 # vercel
 .vercel
@@ -36,6 +39,7 @@ yarn-error.log*
 next-env.d.ts
 
 # TalkBridge Server
-/server/.env
-/server/node_modules
+/backend/.env
+/backend/node_modules
+/frontend/node_modules
 

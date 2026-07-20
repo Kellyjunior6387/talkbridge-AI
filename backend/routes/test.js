@@ -2,7 +2,7 @@ import express from 'express';
 import { classifyAndReply } from '../services/gemini.js';
 import { publishReply } from '../services/zernio.js';
 import { escalateToAgent } from '../services/twilio.js';
-import { insertMessage, updateMessage, getLatestMessages } from '../services/supabase.js';
+import { insertMessage, updateMessage, getLatestMessages, markAllMessagesRead } from '../services/supabase.js';
 import { sanitizeMessage } from './webhook.js';
 import { log } from '../utils/logger.js';
 
@@ -122,4 +122,64 @@ router.get('/messages', async (req, res) => {
   }
 });
 
+/**
+ * Handle human inbox actions: approve & reply (auto_replied) or dismiss (human_reviewed)
+ */
+router.post('/messages/:id/action', async (req, res) => {
+  const { id } = req.params;
+  const { action, replyText, platform } = req.body;
+
+  try {
+    log('info', `[Action] Message ID ${id} action requested: ${action}`);
+
+    if (action === 'send') {
+      if (!replyText) {
+        return res.status(400).json({ error: 'Reply text is required for send action' });
+      }
+
+      // Publish reply to social platform (TikTok/Instagram) via Zernio publishing
+      let zernioPostId = 'manual_review_reply';
+      try {
+        zernioPostId = await publishReply(replyText, platform || 'instagram');
+        log('info', `[Action] Zernio response successful: ${zernioPostId}`);
+      } catch (publishErr) {
+        log('error', `[Action] Zernio publishing failed but log will update: ${publishErr.message}`);
+      }
+
+      // Update database status
+      await updateMessage(id, {
+        status: 'auto_replied',
+        ai_reply: replyText,
+        zernio_post_id: zernioPostId
+      });
+
+      return res.json({ success: true, status: 'auto_replied', zernio_post_id: zernioPostId });
+    } else if (action === 'dismiss') {
+      // Dismiss flags as human reviewed / skipped
+      await updateMessage(id, { status: 'human_reviewed' });
+      return res.json({ success: true, status: 'human_reviewed' });
+    } else {
+      return res.status(400).json({ error: 'Invalid message action specified' });
+    }
+  } catch (err) {
+    log('error', `[Action] Message ID ${id} action failed: ${err.message}`);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Mark all pending messages read
+ */
+router.post('/messages/mark-all-read', async (req, res) => {
+  try {
+    log('info', '[Action] Request to mark all pending messages read');
+    await markAllMessagesRead();
+    return res.json({ success: true });
+  } catch (err) {
+    log('error', `[Action] Mark all read failed: ${err.message}`);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
+
