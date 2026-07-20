@@ -7,13 +7,13 @@ This guide explains how to test the TalkBridge AI backend endpoints. The testing
 ## 1. Prerequisites
 
 ### Step A: Setup Environment variables
-Make sure you have copied `/server/.env.example` to `/server/.env` and supplied the required API keys.
+Make sure you have copied `/backend/.env.example` to `/backend/.env` and supplied the required API keys.
 At a minimum, ensure `GEMINI_API_KEY` is present. If you do not have active Zernio or Twilio accounts, the simulation will still run successfully and log the actions as "simulated" in the database.
 
 ### Step B: Start the Server
-Navigate to the `/server` directory and start the Express server:
+Navigate to the `/backend` directory and start the Express server:
 ```bash
-cd server
+cd backend
 npm install
 npm run dev
 ```

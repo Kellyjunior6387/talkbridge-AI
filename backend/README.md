@@ -1,6 +1,6 @@
 # TalkBridge AI — Backend Webhook & Orchestration Server
 
-This is the Node.js/Express backend server for **TalkBridge AI**. It functions as an intelligent ingestion and routing layer:
+This is the Node.js/Express backend server for **TalkBridge AI**. It lives in the `backend/` workspace package and functions as an intelligent ingestion and routing layer:
 1. Receives incoming webhooks (e.g., TikTok comments).
 2. Processes them using **Gemini AI** (`gemini-1.5-flash`) for multi-lingual intent classification, sentiment analysis, and context-aware reply drafting.
 3. Inserts the record into **Supabase** for audit logs and real-time dashboard updates.
@@ -18,7 +18,7 @@ cp .env.example .env
 *Note: Make sure to define `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ZERNIO_API_KEY`, and `TWILIO_*` credentials.*
 
 ### 2. Install Dependencies
-Run npm install in the server directory:
+Run npm install in the backend directory:
 ```bash
 npm install
 ```

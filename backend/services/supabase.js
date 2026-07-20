@@ -165,3 +165,30 @@ export async function getLatestMessages(limit = 20) {
     throw new Error(`Supabase select failed: ${err.message}`);
   });
 }
+
+/**
+ * Marks all pending messages as human reviewed
+ */
+export async function markAllMessagesRead() {
+  return retryQuery(async () => {
+    try {
+      if (!supabase) {
+        throw new Error('Supabase client is not initialized due to missing credentials');
+      }
+
+      const { data, error } = await supabase
+        .from('messages')
+        .update({ status: 'human_reviewed' })
+        .eq('status', 'pending');
+
+      if (error) {
+        throw error;
+      }
+      return data;
+    } catch (err) {
+      log('error', `[Supabase] markAllMessagesRead failed: ${err.message}`);
+      throw err;
+    }
+  });
+}
+
