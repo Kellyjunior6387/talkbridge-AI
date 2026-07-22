@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Search } from "lucide-react";
 import { useToast } from "../layout";
+import { API_BASE_URL } from "../../../lib/api";
 
 interface LogEntry {
   id: string;
@@ -46,7 +47,7 @@ export default function MessageLogPage() {
   const fetchLogs = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:4000/test/messages");
+      const res = await fetch(`${API_BASE_URL}/test/messages`);
       if (!res.ok) throw new Error("Backend connection failed");
       const data = await res.json();
       

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { useToast } from "../layout";
+import { API_BASE_URL } from "../../../lib/api";
 
 interface DBMessage {
   id: string;
@@ -61,7 +62,7 @@ export default function UsagePage() {
   const fetchUsageData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:4000/test/messages");
+      const res = await fetch(`${API_BASE_URL}/test/messages`);
       if (!res.ok) throw new Error("Could not contact analytics service");
       const data = await res.json();
       

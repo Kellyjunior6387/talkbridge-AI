@@ -9,6 +9,7 @@ import {
   Package, 
   BarChart2, 
   Settings,
+  Share2,
   X,
   CheckCircle,
   Info,
@@ -134,6 +135,12 @@ export default function DashboardLayout({
       name: "Products",
       path: "/dashboard/products",
       icon: Package,
+      badge: 0
+    },
+    {
+      name: "Integrate",
+      path: "/dashboard/integrate",
+      icon: Share2,
       badge: 0
     },
     {

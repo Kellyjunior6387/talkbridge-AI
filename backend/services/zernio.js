@@ -1,17 +1,110 @@
 import Zernio from '@zernio/node';
+import crypto from 'crypto';
 import { log } from '../utils/logger.js';
 
-// The Zernio client automatically reads process.env.ZERNIO_API_KEY
 let zernio;
-try {
-  if (process.env.ZERNIO_API_KEY) {
-    // If Zernio library uses a default constructor
-    zernio = new Zernio();
-  } else {
-    log('error', 'Zernio Service: Missing ZERNIO_API_KEY in environment variables.');
+
+function getZernioClient() {
+  if (zernio) {
+    return zernio;
   }
-} catch (e) {
-  log('error', `Zernio client instantiation failed: ${e.message}`);
+
+  if (!process.env.ZERNIO_API_KEY) {
+    throw new Error('Zernio API key is missing from environment variables');
+  }
+
+  zernio = new Zernio({ apiKey: process.env.ZERNIO_API_KEY });
+  return zernio;
+}
+
+function unwrapSdkResult(result) {
+  if (!result) {
+    return result;
+  }
+
+  return result.data
+    ?? result.post
+    ?? result.profile
+    ?? result.webhook
+    ?? result.accounts
+    ?? result.files
+    ?? result;
+}
+
+function resolveProfileId(profileId) {
+  return profileId || process.env.ZERNIO_PROFILE_ID || null;
+}
+
+export async function createWorkspaceProfile({ name, description, color }) {
+  const client = getZernioClient();
+  const response = await client.profiles.createProfile({
+    body: { name, description, color },
+  });
+  return unwrapSdkResult(response);
+}
+
+export async function getConnectUrlForPlatform({ platform, profileId, redirectUrl, headless = true }) {
+  const client = getZernioClient();
+  const response = await client.connect.getConnectUrl({
+    path: { platform },
+    query: {
+      profileId: resolveProfileId(profileId),
+      redirect_url: redirectUrl,
+      headless,
+    },
+  });
+  return unwrapSdkResult(response);
+}
+
+export async function listConnectedAccounts() {
+  const client = getZernioClient();
+  const response = await client.accounts.listAccounts();
+  return unwrapSdkResult(response);
+}
+
+export async function createWebhookSubscription({ name, url, secret, events, isActive = true, customHeaders = {} }) {
+  const client = getZernioClient();
+  const response = await client.webhooks.createWebhookSettings({
+    body: { name, url, secret, events, isActive, customHeaders },
+  });
+  return unwrapSdkResult(response);
+}
+
+export async function generateMediaUploadLink({ filename, contentType, size }) {
+  const client = getZernioClient();
+  const response = await client.media.getMediaPresignedUrl({
+    body: { filename, contentType, size },
+  });
+  return unwrapSdkResult(response);
+}
+
+export async function createProductPost({
+  content,
+  title,
+  profileId,
+  platforms,
+  mediaItems = [],
+  publishNow = true,
+  scheduledFor,
+  metadata = {},
+}) {
+  const client = getZernioClient();
+  const response = await client.posts.createPost({
+    body: {
+      title,
+      content,
+      mediaItems,
+      platforms,
+      publishNow,
+      scheduledFor,
+      metadata,
+      queuedFromProfile: resolveProfileId(profileId) || undefined,
+    },
+    headers: {
+      'x-request-id': crypto.randomUUID(),
+    },
+  });
+  return unwrapSdkResult(response);
 }
 
 /**
@@ -22,11 +115,14 @@ try {
  */
 export async function publishReply(replyText, platform) {
   try {
+    const client = getZernioClient();
+
     // Map TalkBridge platform names to Zernio platform names
     const platformMap = {
-      tiktok: 'twitter',      // TikTok has no direct Zernio publish yet; publish to Twitter/X
+      tiktok: 'twitter',
       instagram: 'instagram',
-      sms: null,              // SMS replies go via Twilio, not Zernio
+      twitter: 'twitter',
+      sms: null,
       whatsapp: null
     };
 
@@ -36,7 +132,6 @@ export async function publishReply(replyText, platform) {
       return null; 
     }
 
-    // Get the right account ID from env
     const accountIdMap = {
       twitter: process.env.ZERNIO_ACCOUNT_ID_TWITTER,
       instagram: process.env.ZERNIO_ACCOUNT_ID_INSTAGRAM,
@@ -49,18 +144,16 @@ export async function publishReply(replyText, platform) {
       return null;
     }
 
-    if (!zernio) {
-      throw new Error('Zernio client is not initialized');
-    }
-
     log('info', `[Zernio] Publishing reply on ${zernioPlatform} to account ${accountId}...`);
-    const { post } = await zernio.posts.createPost({
-      content: replyText,
-      publishNow: true,
-      platforms: [{ platform: zernioPlatform, accountId }]
+    const response = await client.posts.createPost({
+      body: {
+        content: replyText,
+        publishNow: true,
+        platforms: [{ platform: zernioPlatform, accountId }],
+      },
     });
 
-    // Make sure we handle cases where post might be shaped differently
+    const post = unwrapSdkResult(response)?.post || unwrapSdkResult(response);
     const postId = post?._id || post?.id || 'simulated_zernio_id';
     log('info', `[Zernio] Post published successfully. Post ID: ${postId}`);
     return postId;
@@ -78,9 +171,7 @@ export async function publishReply(replyText, platform) {
  */
 export async function schedulePublicStatement(content, scheduledFor) {
   try {
-    if (!zernio) {
-      throw new Error('Zernio client is not initialized');
-    }
+    const client = getZernioClient();
 
     const platforms = [
       { platform: 'twitter', accountId: process.env.ZERNIO_ACCOUNT_ID_TWITTER },
@@ -93,13 +184,16 @@ export async function schedulePublicStatement(content, scheduledFor) {
     }
 
     log('info', `[Zernio] Scheduling public statement to ${platforms.length} platforms for ${scheduledFor}...`);
-    const { post } = await zernio.posts.createPost({
-      content,
-      scheduledFor,
-      timezone: 'Africa/Nairobi',
-      platforms
+    const response = await client.posts.createPost({
+      body: {
+        content,
+        scheduledFor,
+        timezone: 'Africa/Nairobi',
+        platforms,
+      },
     });
 
+    const post = unwrapSdkResult(response)?.post || unwrapSdkResult(response);
     const postId = post?._id || post?.id || 'simulated_zernio_sched_id';
     log('info', `[Zernio] Post scheduled successfully. Post ID: ${postId}`);
     return postId;
@@ -157,4 +251,12 @@ export async function publishCommentReply(replyText, accountId, commentId, postI
     log('error', `[Zernio] publishCommentReply failed: ${err.message}`);
     throw new Error(`Zernio comment reply failed: ${err.message}`);
   }
+}
+
+export async function deleteConnectedAccount(accountId) {
+  const client = getZernioClient();
+  const response = await client.accounts.deleteAccount({
+    path: { accountId }
+  });
+  return unwrapSdkResult(response);
 }

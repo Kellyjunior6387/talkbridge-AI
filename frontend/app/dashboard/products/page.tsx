@@ -12,6 +12,8 @@ import {
   ChevronUp, 
   Edit 
 } from "lucide-react";
+import { supabase } from "../../../lib/supabase";
+import { API_BASE_URL } from "../../../lib/api";
 
 interface SizeItem {
   size: string;
@@ -33,6 +35,7 @@ interface Product {
 
 export default function ProductCataloguePage() {
   const { showToast } = useToast();
+  const [userId, setUserId] = useState<string | null>(null);
   
   // Products list state
   const [products, setProducts] = useState<Product[]>([
@@ -93,10 +96,23 @@ export default function ProductCataloguePage() {
   const [formImage, setFormImage] = useState<string | null>(null);
   const [formSizes, setFormSizes] = useState<SizeItem[]>([]);
   const [formPlatforms, setFormPlatforms] = useState<("instagram" | "tiktok" | "whatsapp")[]>([]);
-  const [formAiReference, setFormAiReference] = useState(true);
   const [formAiInstructions, setFormAiInstructions] = useState("");
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (mounted) {
+        setUserId(data.user?.id || null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Handle Toggle AI reference directly in grid
   const handleToggleReference = (id: string, name: string, currentVal: boolean) => {
@@ -110,6 +126,37 @@ export default function ProductCataloguePage() {
     showToast(`${name} removed from catalogue.`, "error");
   };
 
+  const handlePublishProduct = async (product: Product) => {
+    if (!userId) {
+      showToast("No active session found.", "error");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/zernio/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          productId: product.id,
+          content: `${product.name} is now available for Ksh ${product.price.toLocaleString()}. ${product.aiInstructions || product.description}`,
+          platforms: product.platforms,
+          publishNow: true,
+          mediaItems: product.image ? [{ type: "image", url: product.image, title: product.name, altText: product.description }] : []
+        })
+      });
+
+      if (!res.ok) {
+        const payload = await res.json();
+        throw new Error(payload.error || "Failed to publish product post");
+      }
+
+      showToast(`${product.name} published via Zernio.`, "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to publish product post", "error");
+    }
+  };
+
   // Open modal for new product
   const handleOpenAddModal = () => {
     setIsEditing(false);
@@ -120,7 +167,6 @@ export default function ProductCataloguePage() {
     setFormImage(null);
     setFormSizes([{ size: "M", qty: 5, inStock: true }]);
     setFormPlatforms(["instagram", "tiktok"]);
-    setFormAiReference(true);
     setFormAiInstructions("");
     setAdvancedOpen(false);
     setModalOpen(true);
@@ -136,7 +182,6 @@ export default function ProductCataloguePage() {
     setFormImage(prod.image);
     setFormSizes([...prod.sizes]);
     setFormPlatforms([...prod.platforms]);
-    setFormAiReference(prod.aiReference);
     setFormAiInstructions(prod.aiInstructions || "");
     setAdvancedOpen(!!prod.aiInstructions);
     setModalOpen(true);
@@ -168,7 +213,7 @@ export default function ProductCataloguePage() {
   };
 
   // Save changes
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName || !formPrice) {
       showToast("Please fill in required fields", "error");
@@ -177,36 +222,51 @@ export default function ProductCataloguePage() {
 
     const priceNum = parseFloat(formPrice) || 0;
 
-    if (isEditing && editingId) {
-      setProducts(prev => prev.map(p => p.id === editingId ? {
-        ...p,
-        name: formName,
-        description: formDesc,
-        price: priceNum,
-        image: formImage,
-        sizes: formSizes,
-        platforms: formPlatforms,
-        aiReference: formAiReference,
-        aiInstructions: formAiInstructions
-      } : p));
-      showToast(`${formName} updated successfully!`, "success");
-    } else {
-      const newProd: Product = {
-        id: Math.random().toString(36).substring(2, 9),
-        name: formName,
-        description: formDesc,
-        price: priceNum,
-        image: formImage,
-        sizes: formSizes,
-        platforms: formPlatforms,
-        aiReference: formAiReference,
-        aiInstructions: formAiInstructions
-      };
-      setProducts(prev => [...prev, newProd]);
-      showToast(`${formName} added to catalogue.`, "success");
-    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/zernio/products`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          name: formName,
+          description: formDesc,
+          price: priceNum,
+          sizes: formSizes,
+          platforms: formPlatforms,
+          imageUrl: formImage,
+          aiInstructions: formAiInstructions,
+        })
+      });
 
-    setModalOpen(false);
+      if (!res.ok) {
+        const payload = await res.json();
+        throw new Error(payload.error || "Failed to save product");
+      }
+
+      const payload = await res.json();
+      const saved = payload.product;
+
+      const mapped: Product = {
+        id: saved.id,
+        name: saved.name,
+        description: saved.description,
+        price: saved.price,
+        image: saved.image_url,
+        sizes: saved.sizes || [],
+        platforms: saved.platforms || [],
+        aiReference: true,
+        aiInstructions: saved.ai_instructions || ""
+      };
+
+      setProducts(prev => isEditing && editingId
+        ? prev.map(p => p.id === editingId ? mapped : p)
+        : [...prev, mapped]);
+
+      showToast(`${formName} saved successfully!`, "success");
+      setModalOpen(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save product", "error");
+    }
   };
 
   // Stock status calculator helper
@@ -334,6 +394,12 @@ export default function ProductCataloguePage() {
                   className="flex-grow py-2 border border-[#1C2640] hover:border-[#4DFFC3] text-xs font-semibold text-white hover:text-[#4DFFC3] rounded-full flex items-center justify-center gap-1 transition-all"
                 >
                   <Edit size={12} /> Edit
+                </button>
+                <button
+                  onClick={() => handlePublishProduct(product)}
+                  className="px-3 py-2 border border-[#1C2640] hover:border-[#4DFFC3] text-xs font-semibold text-[#4DFFC3] rounded-full transition-all"
+                >
+                  Post
                 </button>
                 <button
                   onClick={() => handleDeleteProduct(product.id, product.name)}

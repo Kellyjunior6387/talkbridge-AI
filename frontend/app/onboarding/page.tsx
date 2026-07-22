@@ -8,6 +8,8 @@ import {
   Upload, 
   ChevronRight
 } from "lucide-react";
+import { supabase } from "../../lib/supabase";
+import { API_BASE_URL } from "../../lib/api";
 
 interface SizeRow {
   size: string;
@@ -18,6 +20,7 @@ interface SizeRow {
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const [userId, setUserId] = useState<string | null>(null);
 
   // STEP 1 STATE: Connections
   const [connections, setConnections] = useState({
@@ -27,11 +30,15 @@ export default function OnboardingPage() {
     zernio: false
   });
 
-  const handleConnect = (platform: "instagram" | "tiktok" | "whatsapp" | "zernio") => {
+  const handleConnect = async (platform: "instagram" | "tiktok" | "whatsapp" | "zernio") => {
     setConnections(prev => ({
       ...prev,
       [platform]: !prev[platform]
     }));
+
+    if (platform === "zernio" && userId) {
+      await fetch(`${API_BASE_URL}/api/zernio/profiles/${userId}`);
+    }
   };
 
   // STEP 2 STATE: Brand Voice
@@ -90,6 +97,21 @@ export default function OnboardingPage() {
 
   // Check if at least one platform is connected to continue step 1
   const canContinueStep1 = connections.instagram || connections.tiktok || connections.whatsapp;
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (!mounted) {
+        return;
+      }
+      setUserId(data.user?.id || null);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#080B14] text-[#F0F4FF] font-body py-12 px-6 flex flex-col items-center">

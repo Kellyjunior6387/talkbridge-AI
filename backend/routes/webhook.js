@@ -226,4 +226,27 @@ router.post('/zernio', (req, res) => {
   })();
 });
 
+router.post('/zernio/comments', (req, res) => {
+  const payload = req.body;
+
+  if (!payload?.id || payload.event !== 'comment.received' || !payload.comment?.text) {
+    log('warn', `[Zernio Webhook] Rejected invalid comment payload: ${JSON.stringify(payload)}`);
+    return res.status(400).json({ error: 'Invalid Zernio comment webhook payload' });
+  }
+
+  res.status(200).json({ received: true });
+
+  (async () => {
+    try {
+      const comment = payload.comment;
+      const authorUsername = comment.author?.username || 'unknown';
+      const messageText = sanitizeMessage(comment.text);
+
+      log('info', `[Zernio Webhook] Received comment ${payload.id} on post ${comment.postId || 'unknown'} from @${authorUsername}: "${messageText}"`);
+    } catch (err) {
+      log('error', `[Zernio Webhook] comment delivery handling failed: ${err.message}`);
+    }
+  })();
+});
+
 export default router;

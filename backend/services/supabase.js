@@ -29,11 +29,11 @@ import { log } from '../utils/logger.js';
 // Polyfill WebSocket globally to satisfy Supabase SDK environment checks in Node.js < 22
 globalThis.WebSocket = ws;
 
-// Support both backend-only service keys and frontend public keys as fallbacks
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+// Support both backend-only service keys 
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-let supabase = null;
+export let supabase = null;
 
 if (supabaseUrl && supabaseServiceKey) {
   try {
@@ -190,5 +190,49 @@ export async function markAllMessagesRead() {
       throw err;
     }
   });
+}
+
+/**
+ * Generic row upsert helper for product/profile tables.
+ * @param {string} table
+ * @param {Object|Array<Object>} rows
+ * @param {string} [onConflict]
+ */
+export async function upsertRows(table, rows, onConflict) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized due to missing credentials');
+  }
+
+  const payload = Array.isArray(rows) ? rows : [rows];
+  const query = supabase.from(table).upsert(payload, onConflict ? { onConflict } : undefined).select();
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function listRows(table, filters = {}) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized due to missing credentials');
+  }
+
+  let query = supabase.from(table).select('*');
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && value !== '') {
+      query = query.eq(key, value);
+    }
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) {
+    throw error;
+  }
+  return data || [];
+}
+
+export async function getRow(table, filters = {}) {
+  const rows = await listRows(table, filters);
+  return rows[0] || null;
 }
 

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import webhookRouter from './routes/webhook.js';
+import zernioRouter from './routes/zernio.js';
 import testRouter from './routes/test.js';
 import { log } from './utils/logger.js';
 
@@ -31,6 +32,7 @@ app.use(cors());
 
 // Reject webhook payloads larger than 10kb for security
 app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -43,6 +45,7 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/webhook', webhookRouter);
+app.use('/api/zernio', zernioRouter);
 app.use('/test', testRouter);
 
 // Global error handler

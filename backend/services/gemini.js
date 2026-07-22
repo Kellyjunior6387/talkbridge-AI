@@ -118,3 +118,76 @@ RESPONSE FORMAT — return ONLY valid JSON:
 
   return fallback;
 }
+
+/**
+ * Generates structured product metadata for AI-assisted catalog entries.
+ * @param {Object} product
+ * @returns {Promise<Object>}
+ */
+export async function generateProductMetadata(product) {
+  const fallback = {
+    summary: product.description || '',
+    audience: ['general'],
+    keywords: [],
+    suggestedHashtags: [],
+    talkingPoints: [],
+    responseGuidance: 'Use the product name, price, and availability from the record.'
+  };
+
+  if (!genAI) {
+    log('warn', '[Gemini] Product metadata requested but model is unavailable. Returning fallback metadata.');
+    return fallback;
+  }
+
+  const systemInstruction = `You are TalkBridge AI. Create structured product intelligence from catalog data.
+
+Return ONLY valid JSON with this shape:
+{
+  "summary": "one concise sentence about the product",
+  "audience": ["buyer segment 1", "buyer segment 2"],
+  "keywords": ["keyword1", "keyword2"],
+  "suggestedHashtags": ["#hashtag1", "#hashtag2"],
+  "talkingPoints": ["fact 1", "fact 2"],
+  "responseGuidance": "how the AI should answer questions about the product"
+}`;
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3.1-flash-lite',
+      systemInstruction,
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.2,
+      }
+    });
+
+    const prompt = JSON.stringify({
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      sizes: product.sizes,
+      platforms: product.platforms,
+      aiInstructions: product.aiInstructions || ''
+    });
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+
+    if (!responseText) {
+      return fallback;
+    }
+
+    const data = JSON.parse(responseText.trim());
+    return {
+      summary: data.summary || fallback.summary,
+      audience: Array.isArray(data.audience) ? data.audience : fallback.audience,
+      keywords: Array.isArray(data.keywords) ? data.keywords : fallback.keywords,
+      suggestedHashtags: Array.isArray(data.suggestedHashtags) ? data.suggestedHashtags : fallback.suggestedHashtags,
+      talkingPoints: Array.isArray(data.talkingPoints) ? data.talkingPoints : fallback.talkingPoints,
+      responseGuidance: data.responseGuidance || fallback.responseGuidance,
+    };
+  } catch (err) {
+    log('warn', `[Gemini] Product metadata generation failed: ${err.message}`);
+    return fallback;
+  }
+}
