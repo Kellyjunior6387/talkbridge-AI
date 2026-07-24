@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "../layout";
 import { PhoneCall, Check, Send, Play } from "lucide-react";
+import { API_BASE_URL } from "../../../lib/api";
 
 interface UrgentMessage {
   id: string;
@@ -44,7 +45,7 @@ export default function UrgentPage() {
   const fetchMessages = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:4000/test/messages");
+      const res = await fetch(`${API_BASE_URL}/test/messages`);
       if (!res.ok) throw new Error("Failed to fetch messages from backend server");
       const data = await res.json();
       
@@ -89,7 +90,7 @@ export default function UrgentPage() {
 
   const handleSend = async (id: string, username: string, draftText: string, platform: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/test/messages/${id}/action`, {
+      const res = await fetch(`${API_BASE_URL}/test/messages/${id}/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "send", replyText: draftText, platform })
@@ -105,7 +106,7 @@ export default function UrgentPage() {
 
   const handleDismiss = async (id: string, username: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/test/messages/${id}/action`, {
+      const res = await fetch(`${API_BASE_URL}/test/messages/${id}/action`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "dismiss" })
@@ -122,7 +123,7 @@ export default function UrgentPage() {
   const handleMarkAllRead = async () => {
     if (messages.length === 0) return;
     try {
-      const res = await fetch("http://localhost:4000/test/messages/mark-all-read", {
+      const res = await fetch(`${API_BASE_URL}/test/messages/mark-all-read`, {
         method: "POST"
       });
       if (!res.ok) throw new Error("Mark all read failed on server");
@@ -162,7 +163,7 @@ export default function UrgentPage() {
 
     try {
       showToast("Triggering AI pipeline simulation...", "info");
-      const res = await fetch("http://localhost:4000/test/simulate", {
+      const res = await fetch(`${API_BASE_URL}/test/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

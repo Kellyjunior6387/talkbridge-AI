@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { API_BASE_URL } from "../../lib/api";
 
 function AuthContent() {
   const router = useRouter();
@@ -48,7 +49,7 @@ function AuthContent() {
         router.push("/dashboard/urgent");
       } else {
         // Sign up using email/password + metadata
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -59,6 +60,20 @@ function AuthContent() {
           }
         });
         if (error) throw error;
+        if (data.user?.id) {
+          console.log(data.user.id);
+          await fetch(`${API_BASE_URL}/api/zernio/profiles`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: data.user.id,
+              name: businessName,
+              description: `${businessName} social publishing profile`,
+              color: "#4DFFC3"
+            })
+          });
+        }
+
         router.push("/onboarding");
       }
     } catch (err) {

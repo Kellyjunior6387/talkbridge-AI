@@ -10,10 +10,12 @@ import {
   BarChart2,
   Settings,
   TrendingUp,
+  Share2,
   X,
   CheckCircle,
   Info,
-  LogOut
+  LogOut,
+  Video
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -141,6 +143,18 @@ export default function DashboardLayout({
       name: "Insights",
       path: "/dashboard/insights",
       icon: TrendingUp,
+      badge: 0
+    },
+    {
+      name: "Publish",
+      path: "/dashboard/publish",
+      icon: Video,
+      badge: 0
+    },
+    {
+      name: "Integrate",
+      path: "/dashboard/integrate",
+      icon: Share2,
       badge: 0
     },
     {

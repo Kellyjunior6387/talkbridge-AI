@@ -2,9 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import webhookRouter from './routes/webhook.js';
+import zernioRouter from './routes/zernio.js';
 import testRouter from './routes/test.js';
 import insightsRouter from './routes/insights.js';
 import { log } from './utils/logger.js';
+import { ensureMediaBucket } from './services/supabase.js';
 
 // Startup Security Checks
 const aiKey = process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY;
@@ -32,6 +34,7 @@ app.use(cors());
 
 // Reject webhook payloads larger than 10kb for security
 app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -44,6 +47,7 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/webhook', webhookRouter);
+app.use('/api/zernio', zernioRouter);
 app.use('/test', testRouter);
 app.use('/insights', insightsRouter);
 
@@ -58,4 +62,5 @@ app.listen(PORT, () => {
   log('info', `Test simulate: POST http://localhost:${PORT}/test/simulate`);
   log('info', `Detect spikes: POST http://localhost:${PORT}/insights/detect-spikes`);
   log('info', `Health check:  GET  http://localhost:${PORT}/health`);
+  ensureMediaBucket();
 });
