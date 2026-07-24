@@ -3,6 +3,7 @@ import cors from 'cors';
 import 'dotenv/config';
 import webhookRouter from './routes/webhook.js';
 import testRouter from './routes/test.js';
+import insightsRouter from './routes/insights.js';
 import { log } from './utils/logger.js';
 
 // Startup Security Checks
@@ -44,6 +45,7 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/webhook', webhookRouter);
 app.use('/test', testRouter);
+app.use('/insights', insightsRouter);
 
 // Global error handler
 app.use((err, req, res, next) => {
@@ -54,5 +56,6 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   log('info', `TalkBridge server running on port ${PORT}`);
   log('info', `Test simulate: POST http://localhost:${PORT}/test/simulate`);
+  log('info', `Detect spikes: POST http://localhost:${PORT}/insights/detect-spikes`);
   log('info', `Health check:  GET  http://localhost:${PORT}/health`);
 });

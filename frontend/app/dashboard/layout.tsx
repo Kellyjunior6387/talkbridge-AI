@@ -4,11 +4,12 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { 
-  AlertCircle, 
-  MessageSquare, 
-  Package, 
-  BarChart2, 
+  AlertCircle,
+  MessageSquare,
+  Package,
+  BarChart2,
   Settings,
+  TrendingUp,
   X,
   CheckCircle,
   Info,
@@ -134,6 +135,12 @@ export default function DashboardLayout({
       name: "Products",
       path: "/dashboard/products",
       icon: Package,
+      badge: 0
+    },
+    {
+      name: "Insights",
+      path: "/dashboard/insights",
+      icon: TrendingUp,
       badge: 0
     },
     {

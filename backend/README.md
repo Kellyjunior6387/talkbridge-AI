@@ -56,6 +56,16 @@ npm run dev
 - **`GET /test/messages`**
   - Retrieves the last 20 records processed from Supabase, sorted reverse-chronologically.
 
+### 📈 Sentiment Insights (Known-Issue Detection)
+Aggregates comments into comparable topics and flags statistically abnormal spikes as
+deduped, human-reviewable **known issues**. Full write-up: [`SENTIMENT-INSIGHTS.md`](SENTIMENT-INSIGHTS.md).
+Schema migration: [`db/sentiment-insights.sql`](db/sentiment-insights.sql).
+- **`GET  /insights/known-issues`** — list flagged issues
+- **`POST /insights/detect-spikes`** — run the trailing-7-day z-score scan (cron or on-demand)
+- **`POST /insights/known-issues/:id/review`** — mark `real_issue` / `noise`
+- **`POST /insights/known-issues/:id/status`** — `open` / `investigating` / `resolved`
+- **`GET  /insights/topics`** — the growing topic vocabulary
+
 ---
 
 ## Manual Pipeline Testing

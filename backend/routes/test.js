@@ -3,6 +3,7 @@ import { classifyAndReply } from '../services/gemini.js';
 import { publishReply } from '../services/zernio.js';
 import { escalateToAgent } from '../services/twilio.js';
 import { insertMessage, updateMessage, getLatestMessages, markAllMessagesRead } from '../services/supabase.js';
+import { recordMessageTopics } from '../services/insights.js';
 import { sanitizeMessage } from './webhook.js';
 import { log } from '../utils/logger.js';
 
@@ -48,6 +49,16 @@ router.post('/simulate', async (req, res) => {
     });
 
     log('info', `[Simulation] Supabase log created with ID: ${row.id}`);
+
+    // Sentiment Insights: extract comparable topics & grow the vocabulary (skip pure spam)
+    let insights = { productRef: 'general', topics: [] };
+    if (classification.intent !== 'spam') {
+      insights = await recordMessageTopics({
+        messageId: row.id,
+        messageText: cleanMessage,
+        sentiment: classification.sentiment
+      });
+    }
 
     let action = 'auto_replied';
     let zernioPostId = null;
@@ -99,7 +110,9 @@ router.post('/simulate', async (req, res) => {
       action,
       supabase_id: row.id,
       zernio_post_id: zernioPostId,
-      twilio_sent: twilioSent
+      twilio_sent: twilioSent,
+      product_ref: insights.productRef,
+      topics: insights.topics.map(t => ({ slug: t.slug, label: t.label, keyword: t.keyword, is_new: t.isNew }))
     });
 
   } catch (err) {
