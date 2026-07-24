@@ -13,7 +13,8 @@ import {
   X,
   CheckCircle,
   Info,
-  LogOut
+  LogOut,
+  Video
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -135,6 +136,12 @@ export default function DashboardLayout({
       name: "Products",
       path: "/dashboard/products",
       icon: Package,
+      badge: 0
+    },
+    {
+      name: "Publish",
+      path: "/dashboard/publish",
+      icon: Video,
       badge: 0
     },
     {

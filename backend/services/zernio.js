@@ -87,6 +87,7 @@ export async function createProductPost({
   publishNow = true,
   scheduledFor,
   metadata = {},
+  ...extra
 }) {
   const client = getZernioClient();
   const response = await client.posts.createPost({
@@ -99,6 +100,7 @@ export async function createProductPost({
       scheduledFor,
       metadata,
       queuedFromProfile: resolveProfileId(profileId) || undefined,
+      ...extra
     },
     headers: {
       'x-request-id': crypto.randomUUID(),

@@ -2,7 +2,7 @@ import express from 'express';
 import { classifyAndReply } from '../services/gemini.js';
 import { publishReply, publishCommentReply } from '../services/zernio.js';
 import { escalateToAgent } from '../services/twilio.js';
-import { insertMessage, updateMessage } from '../services/supabase.js';
+import { insertMessage, updateMessage, getRow } from '../services/supabase.js';
 import { log } from '../utils/logger.js';
 
 const router = express.Router();
@@ -154,9 +154,23 @@ router.post('/zernio', (req, res) => {
 
       log('info', `[Zernio Webhook] Asynchronously processing Zernio ${platform} comment from @${authorUsername}: "${messageText}"`);
 
-      // Step 2: Call Gemini for classification + reply
+      // Retrieve product context linked to the post
+      let product = null;
+      if (postId) {
+        try {
+          const postRecord = await getRow('posts', { zernio_post_id: postId });
+          if (postRecord?.product_id) {
+            product = await getRow('products', { id: postRecord.product_id });
+            log('info', `[Zernio Webhook] Loaded product context: ${product?.name} for post ${postId}`);
+          }
+        } catch (dbErr) {
+          log('error', `[Zernio Webhook] Database lookup for product context failed: ${dbErr.message}`);
+        }
+      }
+
+      // Step 2: Call Gemini for classification + reply (passing product context)
       const { intent, urgency, sentiment, language, reply, reasoning } =
-        await classifyAndReply(messageText, platform, authorUsername);
+        await classifyAndReply(messageText, platform, authorUsername, product);
 
       log('info', `[Zernio Webhook] Gemini results: intent=${intent} urgency=${urgency} lang=${language}`);
       log('info', `[Zernio Webhook] Reasoning: ${reasoning}`);

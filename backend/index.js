@@ -5,6 +5,7 @@ import webhookRouter from './routes/webhook.js';
 import zernioRouter from './routes/zernio.js';
 import testRouter from './routes/test.js';
 import { log } from './utils/logger.js';
+import { ensureMediaBucket } from './services/supabase.js';
 
 // Startup Security Checks
 const aiKey = process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY;
@@ -58,4 +59,5 @@ app.listen(PORT, () => {
   log('info', `TalkBridge server running on port ${PORT}`);
   log('info', `Test simulate: POST http://localhost:${PORT}/test/simulate`);
   log('info', `Health check:  GET  http://localhost:${PORT}/health`);
+  ensureMediaBucket();
 });

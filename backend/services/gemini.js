@@ -1,13 +1,21 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { log } from '../utils/logger.js';
 
 const apiKey = process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY;
 
+// Legacy client for backward-compatible Gemini routing
 let genAI;
 if (apiKey) {
   genAI = new GoogleGenerativeAI(apiKey);
 } else {
   log('error', 'Gemini Service: Missing GEMINI_API_KEY in environment variables.');
+}
+
+// Unified client for Gemma and new model routing
+let genAIUnified;
+if (apiKey) {
+  genAIUnified = new GoogleGenAI({ apiKey });
 }
 
 /**
@@ -17,7 +25,7 @@ if (apiKey) {
  * @param {string} authorUsername - The handle/number of the sender
  * @returns {Promise<Object>} The classification and reply object
  */
-export async function classifyAndReply(messageText, platform, authorUsername) {
+export async function classifyAndReply(messageText, platform, authorUsername, product = null) {
   const fallback = {
     intent: 'question',
     urgency: 3,
@@ -32,10 +40,24 @@ export async function classifyAndReply(messageText, platform, authorUsername) {
     return fallback;
   }
 
+  let productInstruction = '';
+  if (product) {
+    productInstruction = `
+PRODUCT CONTEXT:
+- Name: ${product.name}
+- Description: ${product.description || 'N/A'}
+- Price: Ksh ${Number(product.price).toLocaleString()}
+- Sizes: ${Array.isArray(product.sizes) ? product.sizes.map(s => s.size).join(', ') : 'N/A'}
+- Specific Guidance / Instructions: ${product.ai_instructions || 'N/A'}
+
+You MUST use this product context when answering questions about this product. If the customer asks about price, sizes, or details, match them exactly. Do not invent or guess any details not present in this context.
+`;
+  }
+
   const systemInstruction = `You are TalkBridge AI, the communication intelligence layer for a brand's social media inbox.
 
 Your job: analyze incoming messages and generate a structured JSON response.
-
+${productInstruction}
 RULES:
 - Be concise. Replies must respect platform character limits.
 - Detect the language (English, Swahili, or mixed). Reply in the same language.
@@ -67,27 +89,61 @@ RESPONSE FORMAT — return ONLY valid JSON:
   "reasoning": "<one sentence explaining the urgency score>"
 }`;
 
+  const provider = process.env.AI_PROVIDER || 'gemini';
+  const defaultModelName = provider === 'gemma' ? 'gemma-4-26b-a4b-it' : 'gemini-3.1-flash-lite';
+  const modelName = process.env.AI_MODEL || defaultModelName;
+
   let attempts = 0;
   while (attempts < 2) {
     try {
       attempts++;
-      log('info', `[Gemini] Querying gemini-3.1-flash-lite (Attempt ${attempts}/2)...`);
+      log('info', `[AI Service] Querying ${modelName} via ${provider} provider (Attempt ${attempts}/2)...`);
 
-      // Initialize the model with the system instructions and JSON output mode
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-3.1-flash-lite',
-        systemInstruction: systemInstruction,
-        generationConfig: {
+      let responseText = '';
+
+      if (provider === 'gemma') {
+        if (!genAIUnified) {
+          throw new Error('GoogleGenAI unified SDK not initialized');
+        }
+
+        const config = {
+          systemInstruction: systemInstruction,
           responseMimeType: 'application/json',
           temperature: 0.2,
-        }
-      });
+        };
 
-      const result = await model.generateContent(messageText);
-      const responseText = result.response.text();
+        if (modelName.includes('gemma-4') || modelName.includes('thinking')) {
+          config.thinkingConfig = {
+            thinkingLevel: ThinkingLevel.HIGH
+          };
+        }
+
+        const response = await genAIUnified.models.generateContent({
+          model: modelName,
+          contents: messageText,
+          config: config
+        });
+
+        responseText = response.text;
+      } else {
+        if (!genAI) {
+          throw new Error('Generative AI SDK not initialized');
+        }
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: systemInstruction,
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+          }
+        });
+
+        const result = await model.generateContent(messageText);
+        responseText = result.response.text();
+      }
 
       if (!responseText) {
-        throw new Error('Received empty response from Gemini API');
+        throw new Error('Received empty response from AI API');
       }
 
       // Parse and validate fields
@@ -103,13 +159,13 @@ RESPONSE FORMAT — return ONLY valid JSON:
         reasoning: data.reasoning || 'Successfully classified'
       };
 
-      log('info', `[Gemini] Successfully classified incoming message from @${authorUsername}.`);
+      log('info', `[AI Service] Successfully classified incoming message from @${authorUsername}.`);
       return finalData;
 
     } catch (err) {
-      log('warn', `[Gemini] Attempt ${attempts} failed: ${err.message}`);
+      log('warn', `[AI Service] Attempt ${attempts} failed: ${err.message}`);
       if (attempts >= 2) {
-        log('error', `[Gemini] Failed to generate valid classification after 2 attempts. Returning fallback.`);
+        log('error', `[AI Service] Failed to generate valid classification after 2 attempts. Returning fallback.`);
         return fallback;
       }
       // Loop continues for the retry attempt
@@ -134,8 +190,16 @@ export async function generateProductMetadata(product) {
     responseGuidance: 'Use the product name, price, and availability from the record.'
   };
 
-  if (!genAI) {
+  const provider = process.env.AI_PROVIDER || 'gemini';
+  const defaultModelName = provider === 'gemma' ? 'gemma-4-26b-a4b-it' : 'gemini-3.1-flash-lite';
+  const modelName = process.env.AI_MODEL || defaultModelName;
+
+  if (provider === 'gemini' && !genAI) {
     log('warn', '[Gemini] Product metadata requested but model is unavailable. Returning fallback metadata.');
+    return fallback;
+  }
+  if (provider === 'gemma' && !genAIUnified) {
+    log('warn', '[Gemma] Product metadata requested but GoogleGenAI is unavailable. Returning fallback metadata.');
     return fallback;
   }
 
@@ -152,14 +216,7 @@ Return ONLY valid JSON with this shape:
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3.1-flash-lite',
-      systemInstruction,
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-      }
-    });
+    let responseText = '';
 
     const prompt = JSON.stringify({
       name: product.name,
@@ -170,8 +227,39 @@ Return ONLY valid JSON with this shape:
       aiInstructions: product.aiInstructions || ''
     });
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    if (provider === 'gemma') {
+      const config = {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        temperature: 0.2,
+      };
+
+      if (modelName.includes('gemma-4') || modelName.includes('thinking')) {
+        config.thinkingConfig = {
+          thinkingLevel: ThinkingLevel.HIGH
+        };
+      }
+
+      const result = await genAIUnified.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: config
+      });
+
+      responseText = result.text;
+    } else {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.2,
+        }
+      });
+
+      const result = await model.generateContent(prompt);
+      responseText = result.response.text();
+    }
 
     if (!responseText) {
       return fallback;

@@ -10,8 +10,9 @@ import {
   Upload, 
   ChevronDown, 
   ChevronUp, 
-  Edit 
+  Edit
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { API_BASE_URL } from "../../../lib/api";
 
@@ -33,8 +34,11 @@ interface Product {
   aiInstructions?: string;
 }
 
+
+
 export default function ProductCataloguePage() {
   const { showToast } = useToast();
+  const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   
   // Products list state
@@ -100,12 +104,16 @@ export default function ProductCataloguePage() {
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
+  const handleOpenPostModal = (product: Product) => {
+    router.push(`/dashboard/publish?productId=${product.id}`);
+  };
+
   React.useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (mounted) {
-        setUserId(data.user?.id || null);
+        setUserId(session?.user?.id || null);
       }
     });
 
@@ -126,36 +134,7 @@ export default function ProductCataloguePage() {
     showToast(`${name} removed from catalogue.`, "error");
   };
 
-  const handlePublishProduct = async (product: Product) => {
-    if (!userId) {
-      showToast("No active session found.", "error");
-      return;
-    }
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/zernio/posts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          productId: product.id,
-          content: `${product.name} is now available for Ksh ${product.price.toLocaleString()}. ${product.aiInstructions || product.description}`,
-          platforms: product.platforms,
-          publishNow: true,
-          mediaItems: product.image ? [{ type: "image", url: product.image, title: product.name, altText: product.description }] : []
-        })
-      });
-
-      if (!res.ok) {
-        const payload = await res.json();
-        throw new Error(payload.error || "Failed to publish product post");
-      }
-
-      showToast(`${product.name} published via Zernio.`, "success");
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to publish product post", "error");
-    }
-  };
 
   // Open modal for new product
   const handleOpenAddModal = () => {
@@ -396,7 +375,7 @@ export default function ProductCataloguePage() {
                   <Edit size={12} /> Edit
                 </button>
                 <button
-                  onClick={() => handlePublishProduct(product)}
+                  onClick={() => handleOpenPostModal(product)}
                   className="px-3 py-2 border border-[#1C2640] hover:border-[#4DFFC3] text-xs font-semibold text-[#4DFFC3] rounded-full transition-all"
                 >
                   Post
@@ -630,6 +609,8 @@ export default function ProductCataloguePage() {
           </div>
         </div>
       )}
+
+
 
     </div>
   );

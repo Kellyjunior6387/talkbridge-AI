@@ -10,7 +10,7 @@ import {
   generateMediaUploadLink,
   createProductPost,
 } from '../services/zernio.js';
-import { getRow, listRows, upsertRows } from '../services/supabase.js';
+import { getRow, listRows, upsertRows, createSignedUploadUrl } from '../services/supabase.js';
 import { log } from '../utils/logger.js';
 
 const router = express.Router();
@@ -86,7 +86,7 @@ router.delete('/accounts/:accountId', async (req, res) => {
 
 router.post('/connect/:platform', async (req, res) => {
   try {
-    console.log('req.body:', req.body); 
+    console.log('req.body:', req.body);
     const { platform } = req.params;
     const { profileId, redirectUrl } = req.body;
     const authUrl = await getConnectUrlForPlatform({
@@ -151,6 +151,35 @@ router.post('/media/upload-link', async (req, res) => {
   }
 });
 
+router.post('/media/supabase-upload-link', async (req, res) => {
+  try {
+    const { filename } = req.body;
+    if (!filename) {
+      return res.status(400).json({ error: 'filename is required' });
+    }
+
+    const fileExt = filename.split('.').pop();
+    const uniqueName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+    const filePath = `videos/${uniqueName}`;
+
+    const data = await createSignedUploadUrl(filePath);
+
+    // Build the public URL
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/media/${filePath}`;
+
+    return res.json({
+      signedUrl: data.signedUrl,
+      token: data.token,
+      path: data.path,
+      publicUrl,
+    });
+  } catch (err) {
+    log('error', `[Supabase Storage] Failed to generate signed upload URL: ${err.message}`);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/products', async (req, res) => {
   try {
     const { userId, name, description, price, sizes = [], platforms = [], imageUrl, aiInstructions } = req.body;
@@ -203,7 +232,17 @@ router.get('/products/:userId', async (req, res) => {
 
 router.post('/posts', async (req, res) => {
   try {
-    const { userId, productId, content, platforms, mediaItems = [], publishNow = true, scheduledFor } = req.body;
+    const {
+      userId,
+      productId,
+      content,
+      platforms,
+      mediaItems = [],
+      publishNow = true,
+      scheduledFor,
+      tiktokSettings = { allowComment: true, allowDuet: true, allowStitch: true },
+      facebookSettings = {}
+    } = req.body;
     if (!userId || !productId || !content) {
       return res.status(400).json({ error: 'userId, productId, and content are required' });
     }
@@ -216,17 +255,28 @@ router.post('/posts', async (req, res) => {
     const profile = await getRow('user_profiles', { user_id: userId });
     const targetPlatforms = normalizePlatforms(platforms.length ? platforms : product.platforms);
 
+    const platformsToSend = targetPlatforms
+      .map((platform) => {
+        const accountId = req.body.accountIds?.[platform];
+        if (!accountId) return null;
+        return { platform, accountId };
+      })
+      .filter(Boolean);
+
+    if (platformsToSend.length === 0) {
+      return res.status(400).json({ error: 'No connected accounts found for the selected platforms. Please integrate your accounts first.' });
+    }
+
     const post = await createProductPost({
       title: product.name,
       content,
       profileId: profile?.zernio_profile_id,
-      platforms: targetPlatforms.map((platform) => ({
-        platform,
-        accountId: req.body.accountIds?.[platform] || '',
-      })),
+      platforms: platformsToSend,
       mediaItems,
       publishNow,
       scheduledFor,
+      tiktokSettings,
+      facebookSettings,
       metadata: {
         productId,
         productName: product.name,
@@ -235,7 +285,7 @@ router.post('/posts', async (req, res) => {
     });
 
     const postRow = {
-      id: post?.post?._id || post?.post?.id || crypto.randomUUID(),
+      id: crypto.randomUUID(),
       user_id: userId,
       product_id: productId,
       zernio_post_id: post?.post?._id || post?.post?.id || null,
@@ -251,6 +301,21 @@ router.post('/posts', async (req, res) => {
     };
 
     const saved = await upsertRows('posts', postRow, 'id');
+
+    // Subscribe post/profile to Zernio comment.received webhooks
+    try {
+      const webhookUrl = `${process.env.WEBHOOK_URL || 'https://talkbridge.ngrok-free.app'}/webhook/zernio`;
+      log('info', `[Webhook Setup] Subscribing Zernio webhook for comment.received to ${webhookUrl}...`);
+      await createWebhookSubscription({
+        name: `post_${postRow.id.replace(/-/g, '').slice(0, 16)}`,
+        url: webhookUrl,
+        events: ['comment.received'],
+      });
+      log('info', `[Webhook Setup] Webhook subscribed successfully.`);
+    } catch (webhookErr) {
+      log('error', `[Webhook Setup] Webhook subscription failed: ${webhookErr.message}`);
+    }
+
     return res.json({ success: true, post: saved[0] || postRow, zernio: post });
   } catch (err) {
     log('error', `[Zernio API] create post failed: ${err.message}`);

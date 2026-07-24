@@ -236,3 +236,45 @@ export async function getRow(table, filters = {}) {
   return rows[0] || null;
 }
 
+export async function ensureMediaBucket() {
+  if (!supabase) return;
+  try {
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+    if (listError) {
+      log('warn', `[Supabase Storage] Failed to list buckets: ${listError.message}`);
+      return;
+    }
+    const hasMedia = buckets.some(b => b.id === 'media' || b.name === 'media');
+    if (!hasMedia) {
+      log('info', '[Supabase Storage] Media bucket not found. Attempting to create it...');
+      const { error: createError } = await supabase.storage.createBucket('media', {
+        public: true,
+        fileSizeLimit: 52428800 // 50MB
+      });
+      if (createError) {
+        log('error', `[Supabase Storage] Failed to create media bucket: ${createError.message}`);
+      } else {
+        log('info', '[Supabase Storage] Media bucket successfully created and configured as public.');
+      }
+    } else {
+      log('info', '[Supabase Storage] Media bucket verified.');
+    }
+  } catch (err) {
+    log('error', `[Supabase Storage] Error verifying media bucket: ${err.message}`);
+  }
+}
+
+export async function createSignedUploadUrl(filePath) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized due to missing credentials');
+  }
+  const { data, error } = await supabase.storage
+    .from('media')
+    .createSignedUploadUrl(filePath);
+
+  if (error) {
+    throw error;
+  }
+  return data; // returns { signedUrl, token, path }
+}
+
