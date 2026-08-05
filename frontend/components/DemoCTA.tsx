@@ -28,7 +28,7 @@ export default function DemoCTA() {
   return (
     <section className="py-32 relative overflow-hidden bg-background border-t border-border/40">
       {/* Premium Radial Gradient */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(77,255,195,0.08)_0%,transparent_70%)] pointer-events-none z-0" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59, 130, 246,0.08)_0%,transparent_70%)] pointer-events-none z-0" />
 
       {/* Grid Overlay for Texture */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(28,38,64,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(28,38,64,0.15)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none z-0 opacity-40" />
@@ -48,7 +48,7 @@ export default function DemoCTA() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
           <a
             href="/auth"
-            className="w-full sm:w-auto px-8 py-4 rounded-full bg-primary text-background font-display font-bold text-base tracking-wide shadow-[0_0_20px_rgba(77,255,195,0.4)] hover:shadow-[0_0_30px_rgba(77,255,195,0.6)] transition-all duration-300 hover:scale-[1.03]"
+            className="w-full sm:w-auto px-8 py-4 rounded-full bg-primary text-background font-display font-bold text-base tracking-wide shadow-[0_0_20px_rgba(59, 130, 246,0.4)] hover:shadow-[0_0_30px_rgba(59, 130, 246,0.6)] transition-all duration-300 hover:scale-[1.03]"
           >
             Get Started Now
           </a>

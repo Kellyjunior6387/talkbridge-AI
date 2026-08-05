@@ -1,20 +1,19 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
-import Link from "next/link";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import { 
-  AlertCircle, 
   MessageSquare, 
   Package, 
+  Video, 
+  Share2, 
   BarChart2, 
-  Settings,
-  Share2,
-  X,
-  CheckCircle,
-  Info,
-  LogOut,
-  Video
+  Settings, 
+  LogOut, 
+  CheckCircle, 
+  X, 
+  Info 
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -117,20 +116,14 @@ export default function DashboardLayout({
     router.push("/");
   };
 
-  // Nav definitions
+  // Navigation Items Order (1. Messages, 2. Products, 3. Publish, 4. Integrate, 5. Usage, 6. Settings)
   const navItems = [
     {
-      name: "Urgent",
-      path: "/dashboard/urgent",
-      icon: AlertCircle,
-      badge: urgentCount,
-      badgeColor: "bg-[#FF6B6B]"
-    },
-    {
-      name: "Message Log",
+      name: "Messages",
       path: "/dashboard/messages",
       icon: MessageSquare,
-      badge: 0
+      badge: urgentCount,
+      badgeColor: "bg-[#FF6B6B]"
     },
     {
       name: "Products",
@@ -166,7 +159,7 @@ export default function DashboardLayout({
 
   if (loadingSession) {
     return (
-      <div className="min-h-screen bg-[#080B14] flex items-center justify-center text-sm font-mono text-[#7A8BAD]">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm font-mono text-slate-500">
         Verifying secure workspace session...
       </div>
     );
@@ -174,24 +167,24 @@ export default function DashboardLayout({
 
   return (
     <ToastContext.Provider value={{ showToast }}>
-      <div className="min-h-screen bg-[#080B14] text-[#F0F4FF] font-body flex overflow-hidden">
+      <div className="min-h-screen bg-slate-50 text-slate-800 font-body flex overflow-hidden">
         
         {/* DESKTOP SIDEBAR (240px) */}
-        <aside className="hidden md:flex flex-col justify-between w-60 bg-[#0F1624] border-r border-[#1C2640] shrink-0 h-screen sticky top-0">
+        <aside className="hidden md:flex flex-col justify-between w-60 bg-white border-r border-slate-200 shrink-0 h-screen sticky top-0">
           
           {/* Top Logo */}
-          <div className="p-6 border-b border-[#1C2640]/60">
+          <div className="p-6 border-b border-slate-100">
             <Link href="/" className="flex items-center gap-2 group">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4DFFC3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M2 17c4-5 16-5 20 0" />
-                <path d="M2 12h20" strokeDasharray="1 1" className="opacity-60" />
+                <path d="M2 12h20" strokeDasharray="1 1" className="opacity-45" stroke="#3B82F6" />
                 <path d="M2 12c3-1 17-1 20 0" />
                 <path d="M6 12v2" />
                 <path d="M12 11v4" />
                 <path d="M18 12v2" />
               </svg>
-              <span className="font-display font-bold text-lg text-white">
-                TalkBridge<span className="text-[#4DFFC3]">AI</span>
+              <span className="font-display font-bold text-lg text-slate-900">
+                TalkBridge<span className="text-[#3B82F6]">AI</span>
               </span>
             </Link>
           </div>
@@ -207,22 +200,22 @@ export default function DashboardLayout({
                   href={item.path}
                   className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm transition-all duration-150 group border-l-2 ${
                     isActive
-                      ? "bg-[#162033] border-[#4DFFC3] text-white"
-                      : "border-transparent text-[#7A8BAD] hover:bg-[#162033] hover:text-[#F0F4FF]"
+                      ? "bg-blue-50/70 border-blue-600 text-blue-600 font-semibold"
+                      : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <Icon 
                       size={18} 
                       className={`shrink-0 transition-colors ${
-                        isActive ? "text-[#4DFFC3]" : "text-[#7A8BAD] group-hover:text-[#4DFFC3]"
+                        isActive ? "text-blue-600" : "text-slate-400 group-hover:text-blue-600"
                       }`} 
                     />
                     <span className="font-medium">{item.name}</span>
                   </div>
                   
                   {item.badge > 0 && (
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-[#080B14] ${item.badgeColor || "bg-[#4DFFC3]"}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-white ${item.badgeColor || "bg-[#3B82F6]"}`}>
                       {item.badge}
                     </span>
                   )}
@@ -232,19 +225,19 @@ export default function DashboardLayout({
           </nav>
 
           {/* User profile section */}
-          <div className="p-4 border-t border-[#1C2640] flex items-center justify-between bg-[#080B14]/20">
+          <div className="p-4 border-t border-slate-200 flex items-center justify-between bg-slate-50/50">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-[#7B6EF6] text-white flex items-center justify-center font-bold text-sm shrink-0 border border-[#1C2640]">
+              <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0 border border-slate-200 shadow-sm">
                 {userInitials}
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-[#F0F4FF] truncate">{businessName}</p>
-                <p className="text-[10px] text-[#7A8BAD] truncate font-mono">{userEmail}</p>
+                <p className="text-xs font-semibold text-slate-800 truncate">{businessName}</p>
+                <p className="text-[10px] text-slate-500 truncate font-mono">{userEmail}</p>
               </div>
             </div>
             <button 
               onClick={handleLogout}
-              className="p-1.5 text-[#7A8BAD] hover:text-[#FF6B6B] rounded transition-colors"
+              className="p-1.5 text-slate-400 hover:text-red-500 rounded transition-colors"
               title="Logout"
             >
               <LogOut size={16} />
@@ -252,8 +245,8 @@ export default function DashboardLayout({
           </div>
         </aside>
 
-        {/* MOBILE BOTTOM TAB BAR (Sticky at bottom on small screens) */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#0F1624] border-t border-[#1C2640] z-40 flex items-center justify-around px-2 shadow-2xl">
+        {/* MOBILE BOTTOM TAB BAR */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200 z-40 flex items-center justify-around px-2 shadow-2xl">
           {navItems.map((item) => {
             const isActive = pathname === item.path;
             const Icon = item.icon;
@@ -266,17 +259,17 @@ export default function DashboardLayout({
                 <Icon 
                   size={20} 
                   className={`transition-colors ${
-                    isActive ? "text-[#4DFFC3]" : "text-[#7A8BAD]"
+                    isActive ? "text-blue-600" : "text-slate-455"
                   }`} 
                 />
                 <span className={`text-[9px] font-medium mt-1 transition-colors ${
-                  isActive ? "text-white" : "text-[#7A8BAD]"
+                  isActive ? "text-blue-600 font-semibold" : "text-slate-500"
                 }`}>
                   {item.name.split(" ")[0]}
                 </span>
                 
                 {item.badge > 0 && (
-                  <span className="absolute top-1 right-2 w-4 h-4 bg-[#FF6B6B] text-[8px] font-mono font-bold text-[#080B14] rounded-full flex items-center justify-center">
+                  <span className="absolute top-1 right-2 w-4 h-4 bg-[#FF6B6B] text-[8px] font-mono font-bold text-white rounded-full flex items-center justify-center">
                     {item.badge}
                   </span>
                 )}
@@ -286,7 +279,7 @@ export default function DashboardLayout({
         </div>
 
         {/* MAIN VIEW AREA */}
-        <main className="flex-grow overflow-y-auto pb-20 md:pb-0 h-screen relative bg-[#080B14]">
+        <main className="flex-grow overflow-y-auto pb-20 md:pb-0 h-screen relative bg-slate-50">
           {children}
         </main>
 
@@ -300,21 +293,21 @@ export default function DashboardLayout({
             return (
               <div
                 key={toast.id}
-                className={`pointer-events-auto w-[320px] bg-[#162033] border-l-4 rounded-r-lg p-4 shadow-xl flex items-start gap-3 justify-between animate-slideIn ${
-                  isSuccess ? "border-[#4DFFC3]" : isError ? "border-[#FF6B6B]" : "border-[#7B6EF6]"
+                className={`pointer-events-auto w-[320px] bg-white border-l-4 rounded-r-lg p-4 shadow-xl flex items-start gap-3 justify-between border-slate-200 animate-slideIn ${
+                  isSuccess ? "border-blue-600" : isError ? "border-red-500" : "border-indigo-600"
                 }`}
               >
                 <div className="flex gap-2">
                   <div className="mt-0.5 shrink-0">
-                    {isSuccess && <CheckCircle size={16} className="text-[#4DFFC3]" />}
-                    {isError && <X size={16} className="text-[#FF6B6B]" />}
-                    {isInfo && <Info size={16} className="text-[#7B6EF6]" />}
+                    {isSuccess && <CheckCircle size={16} className="text-blue-600" />}
+                    {isError && <X size={16} className="text-red-500" />}
+                    {isInfo && <Info size={16} className="text-indigo-600" />}
                   </div>
-                  <p className="text-xs text-[#F0F4FF] font-medium leading-relaxed">{toast.message}</p>
+                  <p className="text-xs text-slate-800 font-medium leading-relaxed">{toast.message}</p>
                 </div>
                 <button
                   onClick={() => removeToast(toast.id)}
-                  className="text-[#7A8BAD] hover:text-[#F0F4FF] transition-colors"
+                  className="text-slate-400 hover:text-slate-700 transition-colors"
                 >
                   <X size={14} />
                 </button>

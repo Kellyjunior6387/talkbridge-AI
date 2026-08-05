@@ -52,7 +52,7 @@ const MESSAGES_DATA: MessageItem[] = [
   {
     id: "msg-4",
     platform: "SMS",
-    platformColor: "#4DFFC3",
+    platformColor: "#3B82F6",
     sender: "+254 799 888111",
     text: "complained 3x no response. refund me now",
     time: "3m ago",
@@ -96,7 +96,7 @@ const MESSAGES_DATA: MessageItem[] = [
   {
     id: "msg-8",
     platform: "SMS",
-    platformColor: "#4DFFC3",
+    platformColor: "#3B82F6",
     sender: "+254 722 111222",
     text: "Thanks for the fast delivery!",
     time: "7m ago",
@@ -139,7 +139,7 @@ export default function MessageStream() {
       case "SMS":
       default:
         return (
-          <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#4DFFC3]" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 text-[#3B82F6]" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
         );
@@ -230,7 +230,7 @@ export default function MessageStream() {
           {/* Glowing Animated Dash Flow (Left to Center) */}
           <path
             d="M 220,200 H 370"
-            stroke="#4DFFC3"
+            stroke="#3B82F6"
             strokeWidth="2.5"
             className="animate-dash-flow opacity-80"
           />
@@ -310,7 +310,7 @@ export default function MessageStream() {
             <div className="absolute top-1/2 left-1/2 w-20 h-20 bg-primary/10 rounded-full animate-pulse-ring" style={{ animationDelay: "1.2s" }} />
 
             {/* Central Node */}
-            <div className="relative w-16 h-16 rounded-full bg-surface border-2 border-primary flex items-center justify-center shadow-[0_0_25px_rgba(77,255,195,0.4)] z-20">
+            <div className="relative w-16 h-16 rounded-full bg-surface border-2 border-primary flex items-center justify-center shadow-[0_0_25px_rgba(59, 130, 246,0.4)] z-20">
               <span className="font-display font-black text-xl text-primary tracking-wider">
                 AI
               </span>

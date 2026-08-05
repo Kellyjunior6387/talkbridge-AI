@@ -9,20 +9,25 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "#080B14",
-        surface: "#0F1624",
-        border: "#1C2640",
-        primary: "#4DFFC3",
-        secondary: "#7B6EF6",
-        textPrimary: "#F0F4FF",
-        textSecondary: "#7A8BAD",
-        danger: "#FF6B6B",
+        background: "#F8FAFC",
+        surface: "#FFFFFF",
+        border: "#E2E8F0",
+        primary: "#2563EB",
+        secondary: "#4F46E5",
+        textPrimary: "#0F172A",
+        textSecondary: "#64748B",
+        danger: "#EF4444",
       },
       fontFamily: {
-        display: ["'Space Grotesk'", "sans-serif"],
-        body: ["'Inter'", "sans-serif"],
+        sans: ["var(--font-inter)", "sans-serif"],
+        display: ["var(--font-inter)", "sans-serif"],
+        body: ["var(--font-inter)", "sans-serif"],
         mono: ["'JetBrains Mono'", "monospace"],
       },
+      borderRadius: {
+        xl: "12px",
+        lg: "10px",
+      }
     },
   },
   plugins: [],

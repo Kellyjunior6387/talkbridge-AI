@@ -119,7 +119,7 @@ export default function OnboardingPage() {
       {/* HEADER SECTION */}
       <div className="w-full max-w-xl text-center space-y-6 mb-10">
         <div className="flex items-center justify-center gap-2">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4DFFC3" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M2 17c4-5 16-5 20 0" />
             <path d="M2 12h20" strokeDasharray="1 1" className="opacity-60" />
             <path d="M2 12c3-1 17-1 20 0" />
@@ -128,7 +128,7 @@ export default function OnboardingPage() {
             <path d="M18 12v2" />
           </svg>
           <span className="font-display font-bold text-xl text-[#F0F4FF]">
-            TalkBridge<span className="text-[#4DFFC3]">AI</span>
+            TalkBridge<span className="text-[#3B82F6]">AI</span>
           </span>
         </div>
 
@@ -136,7 +136,7 @@ export default function OnboardingPage() {
         <div className="relative pt-4">
           <div className="absolute top-[35px] left-8 right-8 h-[2px] bg-[#1C2640] -z-10" />
           <div 
-            className="absolute top-[35px] left-8 h-[2px] bg-[#4DFFC3] -z-10 transition-all duration-300"
+            className="absolute top-[35px] left-8 h-[2px] bg-[#3B82F6] -z-10 transition-all duration-300"
             style={{ width: `${step === 1 ? "0%" : step === 2 ? "50%" : "100%"}` }}
           />
 
@@ -147,7 +147,7 @@ export default function OnboardingPage() {
                 onClick={() => step > 1 && setStep(1)}
                 className={`w-10 h-10 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all duration-300 ${
                   step >= 1 
-                    ? "bg-[#4DFFC3] border-[#4DFFC3] text-[#080B14] shadow-[0_0_15px_rgba(77,255,195,0.3)]" 
+                    ? "bg-[#3B82F6] border-[#3B82F6] text-[#080B14] shadow-[0_0_15px_rgba(59, 130, 246,0.3)]" 
                     : "bg-[#0F1624] border-[#1C2640] text-[#7A8BAD]"
                 }`}
               >
@@ -162,7 +162,7 @@ export default function OnboardingPage() {
                 onClick={() => step > 2 && setStep(2)}
                 className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
                   step >= 2 
-                    ? "bg-[#4DFFC3] border-[#4DFFC3] text-[#080B14] shadow-[0_0_15px_rgba(77,255,195,0.3)]" 
+                    ? "bg-[#3B82F6] border-[#3B82F6] text-[#080B14] shadow-[0_0_15px_rgba(59, 130, 246,0.3)]" 
                     : "bg-[#0F1624] border-[#1C2640] text-[#7A8BAD]"
                 } ${step > 1 ? "cursor-pointer" : "cursor-not-allowed"}`}
               >
@@ -176,7 +176,7 @@ export default function OnboardingPage() {
               <div 
                 className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
                   step >= 3 
-                    ? "bg-[#4DFFC3] border-[#4DFFC3] text-[#080B14] shadow-[0_0_15px_rgba(77,255,195,0.3)]" 
+                    ? "bg-[#3B82F6] border-[#3B82F6] text-[#080B14] shadow-[0_0_15px_rgba(59, 130, 246,0.3)]" 
                     : "bg-[#0F1624] border-[#1C2640] text-[#7A8BAD]"
                 }`}
               >
@@ -203,7 +203,7 @@ export default function OnboardingPage() {
             <div className="space-y-3">
               {/* Instagram Card */}
               <div className={`p-4 rounded-xl border bg-[#080B14] flex items-center justify-between transition-all duration-300 ${
-                connections.instagram ? "border-[#4DFFC3] shadow-[0_0_15px_rgba(77,255,195,0.1)]" : "border-[#1C2640]"
+                connections.instagram ? "border-[#3B82F6] shadow-[0_0_15px_rgba(59, 130, 246,0.1)]" : "border-[#1C2640]"
               }`}>
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-[#E1306C]/10 flex items-center justify-center text-[#E1306C]">
@@ -222,8 +222,8 @@ export default function OnboardingPage() {
                   onClick={() => handleConnect("instagram")}
                   className={`px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all ${
                     connections.instagram 
-                      ? "bg-[#4DFFC3]/15 text-[#4DFFC3] border border-[#4DFFC3]"
-                      : "bg-[#4DFFC3] text-[#080B14] hover:bg-[#4DFFC3]/90"
+                      ? "bg-[#3B82F6]/15 text-[#3B82F6] border border-[#3B82F6]"
+                      : "bg-[#3B82F6] text-[#080B14] hover:bg-[#3B82F6]/90"
                   }`}
                 >
                   {connections.instagram ? "Connected ✓" : "Connect"}
@@ -232,7 +232,7 @@ export default function OnboardingPage() {
 
               {/* TikTok Card */}
               <div className={`p-4 rounded-xl border bg-[#080B14] flex items-center justify-between transition-all duration-300 ${
-                connections.tiktok ? "border-[#4DFFC3] shadow-[0_0_15px_rgba(77,255,195,0.1)]" : "border-[#1C2640]"
+                connections.tiktok ? "border-[#3B82F6] shadow-[0_0_15px_rgba(59, 130, 246,0.1)]" : "border-[#1C2640]"
               }`}>
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-[#FF0050]/10 flex items-center justify-center text-[#FF0050]">
@@ -251,8 +251,8 @@ export default function OnboardingPage() {
                   onClick={() => handleConnect("tiktok")}
                   className={`px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all ${
                     connections.tiktok 
-                      ? "bg-[#4DFFC3]/15 text-[#4DFFC3] border border-[#4DFFC3]"
-                      : "bg-[#4DFFC3] text-[#080B14] hover:bg-[#4DFFC3]/90"
+                      ? "bg-[#3B82F6]/15 text-[#3B82F6] border border-[#3B82F6]"
+                      : "bg-[#3B82F6] text-[#080B14] hover:bg-[#3B82F6]/90"
                   }`}
                 >
                   {connections.tiktok ? "Connected ✓" : "Connect"}
@@ -261,7 +261,7 @@ export default function OnboardingPage() {
 
               {/* WhatsApp Card */}
               <div className={`p-4 rounded-xl border bg-[#080B14] flex items-center justify-between transition-all duration-300 ${
-                connections.whatsapp ? "border-[#4DFFC3] shadow-[0_0_15px_rgba(77,255,195,0.1)]" : "border-[#1C2640]"
+                connections.whatsapp ? "border-[#3B82F6] shadow-[0_0_15px_rgba(59, 130, 246,0.1)]" : "border-[#1C2640]"
               }`}>
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-[#25D366]/10 flex items-center justify-center text-[#25D366]">
@@ -280,8 +280,8 @@ export default function OnboardingPage() {
                   onClick={() => handleConnect("whatsapp")}
                   className={`px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all ${
                     connections.whatsapp 
-                      ? "bg-[#4DFFC3]/15 text-[#4DFFC3] border border-[#4DFFC3]"
-                      : "bg-[#4DFFC3] text-[#080B14] hover:bg-[#4DFFC3]/90"
+                      ? "bg-[#3B82F6]/15 text-[#3B82F6] border border-[#3B82F6]"
+                      : "bg-[#3B82F6] text-[#080B14] hover:bg-[#3B82F6]/90"
                   }`}
                 >
                   {connections.whatsapp ? "Connected ✓" : "Connect"}
@@ -325,7 +325,7 @@ export default function OnboardingPage() {
               <button
                 onClick={() => setStep(2)}
                 disabled={!canContinueStep1}
-                className="px-6 py-2.5 rounded-full bg-[#4DFFC3] hover:bg-[#4DFFC3]/90 disabled:bg-[#4DFFC3]/30 disabled:text-[#080B14]/50 disabled:cursor-not-allowed text-[#080B14] font-display font-bold text-sm tracking-wide flex items-center gap-1 transition-all"
+                className="px-6 py-2.5 rounded-full bg-[#3B82F6] hover:bg-[#3B82F6]/90 disabled:bg-[#3B82F6]/30 disabled:text-[#080B14]/50 disabled:cursor-not-allowed text-[#080B14] font-display font-bold text-sm tracking-wide flex items-center gap-1 transition-all"
               >
                 Continue <ChevronRight size={16} />
               </button>
@@ -358,8 +358,8 @@ export default function OnboardingPage() {
                     onClick={() => setSelectedTone(tone.id as "friendly" | "professional" | "genz" | "custom")}
                     className={`p-3 rounded-lg border text-sm font-semibold transition-all ${
                       selectedTone === tone.id
-                        ? "bg-[#4DFFC3] border-[#4DFFC3] text-[#080B14]"
-                        : "bg-[#080B14] border-[#1C2640] text-[#7A8BAD] hover:border-[#4DFFC3]/50"
+                        ? "bg-[#3B82F6] border-[#3B82F6] text-[#080B14]"
+                        : "bg-[#080B14] border-[#1C2640] text-[#7A8BAD] hover:border-[#3B82F6]/50"
                     }`}
                   >
                     {tone.label}
@@ -380,7 +380,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setCustomInstructions(e.target.value.slice(0, 250))}
                   placeholder="Always reply in Swahili and English. Use 'sema' instead of 'say'. Keep replies under 100 words."
                   rows={3}
-                  className="w-full px-4 py-3 bg-[#080B14] border border-[#1C2640] text-[#F0F4FF] rounded-lg text-sm focus:outline-none focus:border-[#4DFFC3]"
+                  className="w-full px-4 py-3 bg-[#080B14] border border-[#1C2640] text-[#F0F4FF] rounded-lg text-sm focus:outline-none focus:border-[#3B82F6]"
                 />
               </div>
             )}
@@ -394,7 +394,7 @@ export default function OnboardingPage() {
               <button
                 onClick={() => setShengSupport(!shengSupport)}
                 className={`w-11 h-6 rounded-full relative p-0.5 transition-colors focus:outline-none ${
-                  shengSupport ? "bg-[#4DFFC3]" : "bg-[#1C2640]"
+                  shengSupport ? "bg-[#3B82F6]" : "bg-[#1C2640]"
                 }`}
               >
                 <span className={`block w-5 h-5 rounded-full bg-[#080B14] transition-all transform ${
@@ -405,7 +405,7 @@ export default function OnboardingPage() {
 
             {/* Preview Box */}
             <div className="border border-[#1C2640] rounded-xl p-4 bg-[#080B14] space-y-3">
-              <div className="flex items-center gap-1.5 font-mono text-[10px] text-[#4DFFC3] tracking-widest uppercase font-semibold">
+              <div className="flex items-center gap-1.5 font-mono text-[10px] text-[#3B82F6] tracking-widest uppercase font-semibold">
                 <span>PREVIEW REPLY</span>
               </div>
               
@@ -432,7 +432,7 @@ export default function OnboardingPage() {
               </button>
               <button
                 onClick={() => setStep(3)}
-                className="px-6 py-2.5 rounded-full bg-[#4DFFC3] hover:bg-[#4DFFC3]/90 text-[#080B14] font-display font-bold text-sm tracking-wide flex items-center gap-1 transition-all"
+                className="px-6 py-2.5 rounded-full bg-[#3B82F6] hover:bg-[#3B82F6]/90 text-[#080B14] font-display font-bold text-sm tracking-wide flex items-center gap-1 transition-all"
               >
                 Continue <ChevronRight size={16} />
               </button>
@@ -458,7 +458,7 @@ export default function OnboardingPage() {
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
                   placeholder="Cargo Hoodie"
-                  className="w-full px-4 py-2.5 rounded-lg bg-[#080B14] border border-[#1C2640] text-[#F0F4FF] text-sm focus:outline-none focus:border-[#4DFFC3]"
+                  className="w-full px-4 py-2.5 rounded-lg bg-[#080B14] border border-[#1C2640] text-[#F0F4FF] text-sm focus:outline-none focus:border-[#3B82F6]"
                 />
               </div>
 
@@ -469,7 +469,7 @@ export default function OnboardingPage() {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Product description for AI..."
                   rows={2}
-                  className="w-full px-4 py-2.5 rounded-lg bg-[#080B14] border border-[#1C2640] text-[#F0F4FF] text-sm focus:outline-none focus:border-[#4DFFC3]"
+                  className="w-full px-4 py-2.5 rounded-lg bg-[#080B14] border border-[#1C2640] text-[#F0F4FF] text-sm focus:outline-none focus:border-[#3B82F6]"
                 />
               </div>
 
@@ -482,7 +482,7 @@ export default function OnboardingPage() {
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="2800"
-                    className="w-full pl-12 pr-4 py-2.5 rounded-lg bg-[#080B14] border border-[#1C2640] text-[#F0F4FF] text-sm focus:outline-none focus:border-[#4DFFC3]"
+                    className="w-full pl-12 pr-4 py-2.5 rounded-lg bg-[#080B14] border border-[#1C2640] text-[#F0F4FF] text-sm focus:outline-none focus:border-[#3B82F6]"
                   />
                 </div>
               </div>
@@ -517,7 +517,7 @@ export default function OnboardingPage() {
                         onClick={() => handleSizeRowChange(idx, "inStock", !row.inStock)}
                         className={`px-3 py-1 rounded text-[10px] font-mono font-bold border transition-colors ${
                           row.inStock 
-                            ? "bg-[#4DFFC3]/15 text-[#4DFFC3] border-[#4DFFC3]/30" 
+                            ? "bg-[#3B82F6]/15 text-[#3B82F6] border-[#3B82F6]/30" 
                             : "bg-[#FF6B6B]/15 text-[#FF6B6B] border-[#FF6B6B]/30"
                         }`}
                       >
@@ -537,7 +537,7 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={handleAddSizeRow}
-                  className="px-4 py-1.5 rounded-full border border-dashed border-[#1C2640] hover:border-[#4DFFC3] hover:text-[#4DFFC3] text-xs font-semibold flex items-center gap-1 transition-all"
+                  className="px-4 py-1.5 rounded-full border border-dashed border-[#1C2640] hover:border-[#3B82F6] hover:text-[#3B82F6] text-xs font-semibold flex items-center gap-1 transition-all"
                 >
                   <Plus size={12} /> Add size row
                 </button>
@@ -554,7 +554,7 @@ export default function OnboardingPage() {
                       onClick={() => handleTogglePlatform(plat)}
                       className={`px-4 py-1.5 rounded-full text-xs font-semibold capitalize border transition-all ${
                         selectedPlatforms.includes(plat)
-                          ? "bg-[#4DFFC3]/10 border-[#4DFFC3] text-[#4DFFC3]"
+                          ? "bg-[#3B82F6]/10 border-[#3B82F6] text-[#3B82F6]"
                           : "bg-[#080B14] border-[#1C2640] text-[#7A8BAD]"
                       }`}
                     >
@@ -582,7 +582,7 @@ export default function OnboardingPage() {
                 ) : (
                   <div 
                     onClick={handleMockUpload}
-                    className="border border-dashed border-[#1C2640] hover:border-[#4DFFC3]/50 rounded-lg p-6 text-center cursor-pointer bg-[#080B14] hover:bg-[#080B14]/60 transition-all flex flex-col items-center gap-1.5"
+                    className="border border-dashed border-[#1C2640] hover:border-[#3B82F6]/50 rounded-lg p-6 text-center cursor-pointer bg-[#080B14] hover:bg-[#080B14]/60 transition-all flex flex-col items-center gap-1.5"
                   >
                     <Upload size={20} className="text-[#7A8BAD]" />
                     <span className="text-xs text-white font-medium">Drop image or click to upload</span>
@@ -611,13 +611,13 @@ export default function OnboardingPage() {
                     setSizes([{ size: "M", qty: 5, inStock: true }]);
                     setUploadedImage(null);
                   }}
-                  className="px-4 py-2.5 rounded-full border border-[#1C2640] hover:border-[#4DFFC3] hover:text-[#4DFFC3] text-xs font-semibold w-full sm:w-auto text-center transition-all"
+                  className="px-4 py-2.5 rounded-full border border-[#1C2640] hover:border-[#3B82F6] hover:text-[#3B82F6] text-xs font-semibold w-full sm:w-auto text-center transition-all"
                 >
                   Add another
                 </button>
                 <button
                   onClick={() => router.push("/dashboard/urgent")}
-                  className="px-6 py-2.5 rounded-full bg-[#4DFFC3] hover:bg-[#4DFFC3]/90 text-[#080B14] font-display font-bold text-sm tracking-wide text-center w-full sm:w-auto transition-all hover:shadow-[0_0_15px_rgba(77,255,195,0.4)]"
+                  className="px-6 py-2.5 rounded-full bg-[#3B82F6] hover:bg-[#3B82F6]/90 text-[#080B14] font-display font-bold text-sm tracking-wide text-center w-full sm:w-auto transition-all hover:shadow-[0_0_15px_rgba(59, 130, 246,0.4)]"
                 >
                   Save & Go to Dashboard
                 </button>
