@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useToast } from "../layout";
+import { supabase } from "../../../lib/supabase";
 import { Sliders, Bell } from "lucide-react";
 
 export default function SettingsPage() {
@@ -10,10 +11,48 @@ export default function SettingsPage() {
   const [smsPhone, setSmsPhone] = useState("+254 712 345 678");
   const [autoReplyDelay, setAutoReplyDelay] = useState("4");
   const [swahiliOnly, setSwahiliOnly] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setUserId(session.user.id);
+        const meta = session.user.user_metadata || {};
+        setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
+        setSmsPhone(meta.sms_phone || "+254 712 345 678");
+        setAutoReplyDelay(meta.auto_reply_delay || "4");
+        setSwahiliOnly(!!meta.swahili_only);
+      }
+    });
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    showToast("Settings saved successfully!", "success");
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          business_name: businessName,
+          sms_phone: smsPhone,
+          auto_reply_delay: autoReplyDelay,
+          swahili_only: swahiliOnly
+        }
+      });
+      if (error) throw error;
+
+      if (userId) {
+        // Update user_profiles table name row
+        const { error: profileError } = await supabase
+          .from("user_profiles")
+          .update({ name: businessName })
+          .eq("user_id", userId);
+        if (profileError) console.error("Failed to sync profile name:", profileError);
+      }
+
+      showToast("Settings saved successfully!", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to save settings.", "error");
+    }
   };
 
   return (

@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "../layout";
+import { API_BASE_URL } from "../../../lib/api";
+import { supabase } from "../../../lib/supabase";
 import { 
   Package, 
   Plus, 
@@ -32,56 +34,56 @@ interface Product {
   aiInstructions?: string;
 }
 
+interface BackendProduct {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  image_url?: string | null;
+  sizes?: SizeItem[];
+  platforms?: string[];
+  ai_reference?: boolean;
+  ai_instructions?: string | null;
+}
+
 export default function ProductCataloguePage() {
   const { showToast } = useToast();
   const router = useRouter();
   
-  // Products list state
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: "prod-1",
-      name: "Cargo Hoodie",
-      description: "Premium heavy cotton streetwear hoodie, hand-stitched in Nairobi.",
-      price: 2800,
-      image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=400&q=80",
-      sizes: [
-        { size: "S", qty: 4, inStock: true },
-        { size: "M", qty: 2, inStock: true },
-        { size: "L", qty: 5, inStock: true },
-        { size: "XL", qty: 0, inStock: false }
-      ],
-      platforms: ["instagram", "tiktok", "whatsapp"],
-      aiReference: true,
-      aiInstructions: "Always mention that we offer free gift wrapping for orders over Ksh 5,000."
-    },
-    {
-      id: "prod-2",
-      name: "Sleek Streetwear Tee",
-      description: "Lightweight oversized graphic print tee.",
-      price: 1500,
-      image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80",
-      sizes: [
-        { size: "S", qty: 12, inStock: true },
-        { size: "M", qty: 1, inStock: true },
-        { size: "L", qty: 0, inStock: false }
-      ],
-      platforms: ["instagram", "tiktok"],
-      aiReference: true
-    },
-    {
-      id: "prod-3",
-      name: "Threads Denim Jacket",
-      description: "Distressed style denim outerwear with Nairobi crest print on the back.",
-      price: 4200,
-      image: "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?auto=format&fit=crop&w=400&q=80",
-      sizes: [
-        { size: "M", qty: 0, inStock: false },
-        { size: "L", qty: 0, inStock: false }
-      ],
-      platforms: ["instagram", "whatsapp"],
-      aiReference: false
+  const [products, setProducts] = useState<Product[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  const fetchProducts = useCallback(async (uid: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/zernio/products/${uid}`);
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = data.map((p: BackendProduct) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || "",
+          price: p.price,
+          image: p.image_url,
+          sizes: p.sizes || [],
+          platforms: p.platforms || [],
+          aiReference: p.ai_reference !== false,
+          aiInstructions: p.ai_instructions || ""
+        }));
+        setProducts(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to load products:", err);
     }
-  ]);
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setUserId(session.user.id);
+        fetchProducts(session.user.id);
+      }
+    });
+  }, [fetchProducts]);
 
   // Modal control state
   const [modalOpen, setModalOpen] = useState(false);
@@ -104,15 +106,35 @@ export default function ProductCataloguePage() {
   };
 
   // Handle Toggle AI reference directly in grid
-  const handleToggleReference = (id: string, name: string, currentVal: boolean) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, aiReference: !currentVal } : p));
-    showToast(`AI reference for ${name} ${!currentVal ? "enabled" : "disabled"}.`, "info");
+  const handleToggleReference = async (id: string, name: string, currentVal: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("products")
+        .update({ ai_reference: !currentVal })
+        .eq("id", id);
+      if (error) throw error;
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, aiReference: !currentVal } : p));
+      showToast(`AI reference for ${name} ${!currentVal ? "enabled" : "disabled"}.`, "info");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to update AI reference configuration.", "error");
+    }
   };
 
   // Delete product
-  const handleDeleteProduct = (id: string, name: string) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
-    showToast(`${name} removed from catalogue.`, "error");
+  const handleDeleteProduct = async (id: string, name: string) => {
+    try {
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+      setProducts(prev => prev.filter(p => p.id !== id));
+      showToast(`${name} removed from catalogue.`, "error");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete product from database.", "error");
+    }
   };
 
   // Open modal for new product
@@ -170,36 +192,64 @@ export default function ProductCataloguePage() {
     setFormImage("https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=400&q=80");
   };
 
-  // Save changes locally (Skip backend fetch to keep demo completely stable)
-  const handleSaveProduct = (e: React.FormEvent) => {
+  // Save changes via backend API
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userId) {
+      showToast("User not authenticated", "error");
+      return;
+    }
     if (!formName || !formPrice) {
       showToast("Please fill in required fields", "error");
       return;
     }
 
     const priceNum = parseFloat(formPrice) || 0;
-    const targetId = isEditing && editingId ? editingId : `prod-${Math.random().toString(36).substring(2, 9)}`;
-
-    const mapped: Product = {
-      id: targetId,
-      name: formName,
-      description: formDesc,
-      price: priceNum,
-      image: formImage,
-      sizes: formSizes,
-      platforms: formPlatforms,
-      aiReference: true,
-      aiInstructions: formAiInstructions
-    };
-
-    setProducts(prev => isEditing && editingId
-      ? prev.map(p => p.id === editingId ? mapped : p)
-      : [...prev, mapped]
-    );
-
-    showToast(`${formName} saved successfully to catalogue!`, "success");
-    setModalOpen(false);
+    try {
+      if (isEditing && editingId) {
+        // Direct Supabase update for editing
+        const { error } = await supabase
+          .from("products")
+          .update({
+            name: formName,
+            description: formDesc,
+            price: priceNum,
+            sizes: formSizes,
+            platforms: formPlatforms,
+            image_url: formImage,
+            ai_instructions: formAiInstructions
+          })
+          .eq("id", editingId);
+        if (error) throw error;
+        showToast(`${formName} updated successfully in catalogue!`, "success");
+      } else {
+        // Create new product via Zernio endpoint
+        const res = await fetch(`${API_BASE_URL}/api/zernio/products`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            name: formName,
+            description: formDesc,
+            price: priceNum,
+            sizes: formSizes,
+            platforms: formPlatforms,
+            imageUrl: formImage,
+            aiInstructions: formAiInstructions
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to create product");
+        }
+        showToast(`${formName} saved successfully to catalogue!`, "success");
+      }
+      setModalOpen(false);
+      fetchProducts(userId);
+    } catch (err) {
+      console.error(err);
+      showToast(`Error saving product: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
   };
 
   // Stock status calculator helper

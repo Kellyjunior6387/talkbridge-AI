@@ -2,84 +2,146 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { API_BASE_URL } from "../../../lib/api";
+
+interface DBMessage {
+  status?: string;
+  ai_reply?: string;
+  raw_content?: string;
+  platform?: string;
+  intent?: string;
+  created_at?: string;
+}
 
 export default function UsagePage() {
   const [activeTooltip, setActiveTooltip] = useState<number | null>(null);
 
   // Dynamic aggregates
   const [stats, setStats] = useState({
-    totalReplies: 1284,
-    escalations: 47,
-    escalationRate: "3.7%",
-    tokensUsed: 284200,
-    tokenPct: 56.8,
-    avgTime: "3.8s"
+    totalReplies: 0,
+    escalations: 0,
+    escalationRate: "0.0%",
+    tokensUsed: 0,
+    tokenPct: 0.0,
+    avgTime: "—"
   });
 
   const [platformStats, setPlatformStats] = useState({
-    instagram: 847,
-    tiktok: 312,
-    whatsapp: 125
+    instagram: 0,
+    tiktok: 0,
+    whatsapp: 0
   });
 
   const [intentStats, setIntentStats] = useState({
-    question: 40,
-    hype: 28,
-    complaint: 18,
-    purchase: 9,
-    spam: 5
+    question: 0,
+    hype: 0,
+    complaint: 0,
+    purchase: 0,
+    spam: 0
   });
 
   const [dailyData, setDailyData] = useState([
-    { day: "Mon", count: 142, date: "June 8" },
-    { day: "Tue", count: 184, date: "June 9" },
-    { day: "Wed", count: 165, date: "June 10" },
-    { day: "Thu", count: 201, date: "June 11" },
-    { day: "Fri", count: 247, date: "June 12" },
-    { day: "Sat", count: 198, date: "June 13" },
-    { day: "Sun", count: 147, date: "June 14" }
+    { day: "Mon", count: 0, date: "" },
+    { day: "Tue", count: 0, date: "" },
+    { day: "Wed", count: 0, date: "" },
+    { day: "Thu", count: 0, date: "" },
+    { day: "Fri", count: 0, date: "" },
+    { day: "Sat", count: 0, date: "" },
+    { day: "Sun", count: 0, date: "" }
   ]);
 
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUsageData = useCallback(() => {
+  const fetchUsageData = useCallback(async () => {
     setIsLoading(true);
-    setTimeout(() => {
-      setStats({
-        totalReplies: 148,
-        escalations: 3,
-        escalationRate: "2.0%",
-        tokensUsed: 48960,
-        tokenPct: 9.8,
-        avgTime: "3.2s"
-      });
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        
+        // 1. Basic aggregates
+        const total = data.length;
+        const autoReplied = data.filter((m: DBMessage) => m.status === "auto_replied").length;
+        const escalations = data.filter((m: DBMessage) => m.status === "escalated").length;
+        const escRate = total > 0 ? ((escalations / total) * 100).toFixed(1) : "0.0";
+        
+        // Calculate tokens
+        let totalTokens = 0;
+        data.forEach((m: DBMessage) => {
+          if (m.status === "auto_replied" && m.ai_reply) {
+            totalTokens += Math.floor((m.raw_content || "").length * 0.4 + (m.ai_reply || "").length * 0.8 + 80);
+          } else {
+            totalTokens += 45;
+          }
+        });
+        
+        setStats({
+          totalReplies: autoReplied,
+          escalations,
+          escalationRate: `${escRate}%`,
+          tokensUsed: totalTokens,
+          tokenPct: Math.min(100, (totalTokens / 500000) * 100),
+          avgTime: total > 0 ? "3.2s" : "—"
+        });
 
-      setPlatformStats({
-        instagram: 82,
-        tiktok: 45,
-        whatsapp: 21
-      });
+        // 2. Platforms
+        const igCount = data.filter((m: DBMessage) => m.platform === "instagram").length;
+        const ttCount = data.filter((m: DBMessage) => m.platform === "tiktok").length;
+        const waCount = data.filter((m: DBMessage) => m.platform === "whatsapp").length;
+        setPlatformStats({
+          instagram: igCount,
+          tiktok: ttCount,
+          whatsapp: waCount
+        });
 
-      setIntentStats({
-        question: 42,
-        hype: 31,
-        complaint: 14,
-        purchase: 9,
-        spam: 4
-      });
+        // 3. Intents
+        const questionCount = data.filter((m: DBMessage) => (m.intent || "").toLowerCase() === "question").length;
+        const hypeCount = data.filter((m: DBMessage) => (m.intent || "").toLowerCase() === "hype").length;
+        const complaintCount = data.filter((m: DBMessage) => (m.intent || "").toLowerCase() === "complaint").length;
+        const purchaseCount = data.filter((m: DBMessage) => (m.intent || "").toLowerCase() === "purchase").length;
+        const spamCount = data.filter((m: DBMessage) => (m.intent || "").toLowerCase() === "spam").length;
+        
+        const sumIntents = questionCount + hypeCount + complaintCount + purchaseCount + spamCount || 1;
+        setIntentStats({
+          question: Math.round((questionCount / sumIntents) * 100),
+          hype: Math.round((hypeCount / sumIntents) * 100),
+          complaint: Math.round((complaintCount / sumIntents) * 100),
+          purchase: Math.round((purchaseCount / sumIntents) * 100),
+          spam: Math.round((spamCount / sumIntents) * 100)
+        });
 
-      setDailyData([
-        { day: "Mon", count: 18, date: "June 8" },
-        { day: "Tue", count: 24, date: "June 9" },
-        { day: "Wed", count: 19, date: "June 10" },
-        { day: "Thu", count: 26, date: "June 11" },
-        { day: "Fri", count: 32, date: "June 12" },
-        { day: "Sat", count: 15, date: "June 13" },
-        { day: "Sun", count: 14, date: "June 14" }
-      ]);
+        // 4. Daily Data
+        const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const dayCounts = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+        
+        data.forEach((m: DBMessage) => {
+          if (m.created_at) {
+            const date = new Date(m.created_at);
+            const dayName = daysOfWeek[date.getDay()] as keyof typeof dayCounts;
+            dayCounts[dayName] = (dayCounts[dayName] || 0) + 1;
+          }
+        });
 
+        const today = new Date();
+        const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + 1));
+        
+        const dailyMapped = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((dayName, idx) => {
+          const d = new Date(startOfWeek);
+          d.setDate(d.getDate() + idx);
+          const dateStr = d.toLocaleDateString([], { month: "short", day: "numeric" });
+          return {
+            day: dayName,
+            count: dayCounts[dayName as keyof typeof dayCounts] || 0,
+            date: dateStr
+          };
+        });
+        setDailyData(dailyMapped);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
       setIsLoading(false);
-    }, 300);
+    }
   }, []);
 
   useEffect(() => {

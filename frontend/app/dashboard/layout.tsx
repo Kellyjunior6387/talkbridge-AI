@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, createContext, useContext } from "react";
+import React, { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
@@ -16,6 +16,7 @@ import {
   Info 
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { API_BASE_URL } from "../../lib/api";
 
 // Toast System Types
 export type ToastType = "success" | "error" | "info";
@@ -55,8 +56,20 @@ export default function DashboardLayout({
   const [userInitials, setUserInitials] = useState("TK");
   const [loadingSession, setLoadingSession] = useState(true);
 
-  // Track pending urgent notifications count
-  const urgentCount = 3;
+  const [urgentCount, setUrgentCount] = useState(0);
+
+  const fetchUrgentCount = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        const count = data.filter((m: { status?: string }) => m.status === "pending" || m.status === "escalated").length;
+        setUrgentCount(count);
+      }
+    } catch (err) {
+      console.error("Failed to load urgent count in layout:", err);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -70,11 +83,14 @@ export default function DashboardLayout({
         setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
         const name = meta.full_name || "Threads Kenya";
         setUserInitials(name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2));
+        fetchUrgentCount();
       } else {
         router.push("/auth");
       }
       setLoadingSession(false);
     });
+
+    const interval = setInterval(fetchUrgentCount, 10000);
 
     // Subscribe to auth state transitions
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -85,6 +101,7 @@ export default function DashboardLayout({
         setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
         const name = meta.full_name || "Threads Kenya";
         setUserInitials(name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2));
+        fetchUrgentCount();
       } else {
         router.push("/auth");
       }
@@ -93,8 +110,9 @@ export default function DashboardLayout({
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      clearInterval(interval);
     };
-  }, [router]);
+  }, [router, fetchUrgentCount]);
 
   const showToast = (message: string, type: ToastType = "success") => {
     const id = Math.random().toString(36).substring(2, 9);

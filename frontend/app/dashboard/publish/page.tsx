@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, Suspense } from "react";
+import React, { useEffect, useState, useRef, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { 
   ArrowRight, 
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useToast } from "../layout";
 import { supabase } from "../../../lib/supabase";
+import { API_BASE_URL } from "../../../lib/api";
 
 interface Product {
   id: string;
@@ -30,6 +31,7 @@ interface Product {
 
 interface ConnectedAccount {
   _id: string;
+  id?: string;
   platform: "instagram" | "tiktok" | "twitter";
   username?: string;
   displayName?: string;
@@ -54,85 +56,9 @@ function PublishContent() {
   // Sub Navigation Tabs: "create" (New Post Form) or "history" (Published Posts)
   const [activeTab, setActiveTab] = useState<"create" | "history">("create");
 
-  // Local state for products, accounts, and published history (bypasses backend API)
-  const [products] = useState<Product[]>([
-    {
-      id: "prod-1",
-      name: "Cargo Hoodie",
-      description: "Premium heavy cotton streetwear hoodie, hand-stitched in Nairobi.",
-      price: 2800,
-      image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=400&q=80",
-      platforms: ["instagram", "tiktok", "whatsapp"]
-    },
-    {
-      id: "prod-2",
-      name: "Sleek Streetwear Tee",
-      description: "Lightweight oversized graphic print tee.",
-      price: 1500,
-      image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=400&q=80",
-      platforms: ["instagram", "tiktok"]
-    },
-    {
-      id: "prod-3",
-      name: "Threads Denim Jacket",
-      description: "Distressed style denim outerwear with Nairobi crest print on the back.",
-      price: 4200,
-      image: "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?auto=format&fit=crop&w=400&q=80",
-      platforms: ["instagram", "whatsapp"]
-    }
-  ]);
-
-  const [connectedAccounts] = useState<ConnectedAccount[]>([
-    {
-      _id: "acc-1",
-      platform: "instagram",
-      username: "threads.ke",
-      displayName: "Instagram Business"
-    },
-    {
-      _id: "acc-2",
-      platform: "tiktok",
-      username: "threads_kenya",
-      displayName: "TikTok Creator Profile"
-    }
-  ]);
-
-  const [publishedPosts, setPublishedPosts] = useState<PublishedPost[]>([
-    {
-      id: "post-1",
-      content: "🔥 Back in Stock! Check out the brand new Cargo Hoodie.\n\n💰 Price: Ksh 2,800\n📏 Available in standard sizes.\n\nDM us directly or comment below to order yours instantly! 🚀",
-      media_items: [
-        {
-          type: "video",
-          url: "https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-sign-jacket-39889-large.mp4",
-          title: "Cargo Hoodie Showcase"
-        }
-      ],
-      status: "published",
-      created_at: new Date(Date.now() - 2 * 3600000).toISOString(),
-      metadata: {
-        productId: "prod-1",
-        productName: "Cargo Hoodie"
-      }
-    },
-    {
-      id: "post-2",
-      content: "Nairobi custom streetwear drops are officially live! 🛹 Check out our tees collection. High quality materials, built to last. Tap link in bio to checkout.",
-      media_items: [
-        {
-          type: "video",
-          url: "https://assets.mixkit.co/videos/preview/mixkit-man-dancing-under-neon-lights-42289-large.mp4",
-          title: "Streetwear Tees Reel"
-        }
-      ],
-      status: "published",
-      created_at: new Date(Date.now() - 24 * 3600000).toISOString(),
-      metadata: {
-        productId: "prod-2",
-        productName: "Sleek Streetwear Tee"
-      }
-    }
-  ]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
+  const [publishedPosts, setPublishedPosts] = useState<PublishedPost[]>([]);
 
   // Post Creator States
   const [selectedProductId, setSelectedProductId] = useState("");
@@ -144,39 +70,85 @@ function PublishContent() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
-  const loadingOptions = false;
-  const loadingHistory = false;
-
-  // Ref & values
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [businessName, setBusinessName] = useState("Threads Kenya");
+
+  const fetchOptionsAndAccounts = useCallback(async (uid: string) => {
+    setLoadingOptions(true);
+    try {
+      const prodRes = await fetch(`${API_BASE_URL}/api/zernio/products/${uid}`);
+      if (prodRes.ok) {
+        const prodData = await prodRes.json();
+        const mappedProds = prodData.map((p: { id: string; name: string; description?: string; price: number; image_url?: string | null; platforms?: string[] }) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || "",
+          price: p.price,
+          image: p.image_url,
+          platforms: p.platforms || []
+        }));
+        setProducts(mappedProds);
+        
+        if (mappedProds.length > 0) {
+          const queryProductId = searchParams.get("productId");
+          if (queryProductId && mappedProds.some((p: Product) => p.id === queryProductId)) {
+            setSelectedProductId(queryProductId);
+            const activeProd = mappedProds.find((p: Product) => p.id === queryProductId);
+            if (activeProd) {
+              setCaption(`🔥 Back in Stock! Check out the brand new ${activeProd.name}.\n\n💰 Price: Ksh ${activeProd.price.toLocaleString()}\n📏 Available in standard sizes.\n\nDM us directly or comment below to order yours instantly! 🚀`);
+            }
+          } else {
+            setSelectedProductId(mappedProds[0].id);
+            setCaption(`🔥 Back in Stock! Check out the brand new ${mappedProds[0].name}.\n\n💰 Price: Ksh ${mappedProds[0].price.toLocaleString()}\n📏 Available in standard sizes.\n\nDM us directly or comment below to order yours instantly! 🚀`);
+          }
+        }
+      }
+
+      const accRes = await fetch(`${API_BASE_URL}/api/zernio/accounts`);
+      if (accRes.ok) {
+        const accData = await accRes.json();
+        const list = Array.isArray(accData) ? accData : accData.accounts || [];
+        setConnectedAccounts(list);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingOptions(false);
+    }
+  }, [searchParams]);
+
+  const fetchHistory = useCallback(async (uid: string) => {
+    setLoadingHistory(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/zernio/posts/${uid}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPublishedPosts(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
+        setUserId(session.user.id);
         const meta = session.user.user_metadata || {};
         setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
+        fetchOptionsAndAccounts(session.user.id);
+        fetchHistory(session.user.id);
       }
     });
-
-    // Handle redirected productId query parameter
-    const queryProductId = searchParams.get("productId");
-    if (queryProductId && products.some(p => p.id === queryProductId)) {
-      setSelectedProductId(queryProductId);
-      const activeProd = products.find(p => p.id === queryProductId);
-      if (activeProd) {
-        setCaption(`🔥 Back in Stock! Check out the brand new ${activeProd.name}.\n\n💰 Price: Ksh ${activeProd.price.toLocaleString()}\n📏 Available in standard sizes.\n\nDM us directly or comment below to order yours instantly! 🚀`);
-      }
-    } else if (products.length > 0) {
-      setSelectedProductId(products[0].id);
-      setCaption(`🔥 Back in Stock! Check out the brand new ${products[0].name}.\n\n💰 Price: Ksh ${products[0].price.toLocaleString()}\n📏 Available in standard sizes.\n\nDM us directly or comment below to order yours instantly! 🚀`);
-    }
-  }, [searchParams, products]);
+  }, [fetchOptionsAndAccounts, fetchHistory]);
 
   const handleProductChange = (prodId: string) => {
     setSelectedProductId(prodId);
-    
-    // Auto-generate helper caption
     const activeProduct = products.find(p => p.id === prodId);
     if (activeProduct) {
       setCaption(`🔥 Back in Stock! Check out the brand new ${activeProduct.name}.\n\n💰 Price: Ksh ${activeProduct.price.toLocaleString()}\n\nDM us directly or comment below to order yours instantly! 🚀`);
@@ -203,63 +175,88 @@ function PublishContent() {
     }
   };
 
-  // Mock upload publisher (skip direct server requests)
-  const handlePublishSubmit = (e: React.FormEvent) => {
+  // Real upload publisher
+  const handlePublishSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!videoFile || !selectedProductId || selectedPlatforms.length === 0) {
       showToast("Please ensure a video file, linked product, and target platforms are selected.", "error");
       return;
     }
+    if (!userId) {
+      showToast("User not authenticated.", "error");
+      return;
+    }
 
     setPublishing(true);
     setUploadingMedia(true);
-    setUploadProgress(0);
+    setUploadProgress(10);
 
-    // Simulate upload timer ticks
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setUploadingMedia(false);
-          
-          // Complete mock creation after upload finished
-          setTimeout(() => {
-            const mockPostId = `post-${Math.random().toString(36).substring(2, 9)}`;
-            const activeProduct = products.find(p => p.id === selectedProductId);
-            
-            const newPost: PublishedPost = {
-              id: mockPostId,
-              content: caption,
-              media_items: [
-                {
-                  type: "video",
-                  url: videoPreviewUrl || "https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-sign-jacket-39889-large.mp4",
-                  title: activeProduct?.name || "Video Post"
-                }
-              ],
-              status: "published",
-              created_at: new Date().toISOString(),
-              metadata: {
-                productId: selectedProductId,
-                productName: activeProduct?.name
-              }
-            };
-
-            setPublishedPosts(prev => [newPost, ...prev]);
-            showToast("Video reel successfully posted and webhook comment listeners subscribed!", "success");
-            
-            // Clean up states
-            setVideoFile(null);
-            setVideoPreviewUrl(null);
-            setPublishing(false);
-            setActiveTab("history"); // jump to history tab
-          }, 600);
-
-          return 100;
-        }
-        return prev + 20; // tick up
+    try {
+      // Step 1: Get signed upload credentials
+      const uploadLinkRes = await fetch(`${API_BASE_URL}/api/zernio/media/supabase-upload-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: videoFile.name })
       });
-    }, 150);
+      if (!uploadLinkRes.ok) {
+        throw new Error("Failed to generate secure upload path.");
+      }
+      const { signedUrl, publicUrl } = await uploadLinkRes.json();
+      setUploadProgress(40);
+
+      // Step 2: Upload to Supabase Storage Bucket
+      const uploadRes = await fetch(signedUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": videoFile.type
+        },
+        body: videoFile
+      });
+      if (!uploadRes.ok) {
+        throw new Error("Failed to upload media content.");
+      }
+      setUploadProgress(80);
+      setUploadingMedia(false);
+
+      // Step 3: Create post record
+      const res = await fetch(`${API_BASE_URL}/api/zernio/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          productId: selectedProductId,
+          content: caption,
+          platforms: selectedPlatforms,
+          mediaItems: [
+            {
+              type: "video",
+              url: publicUrl
+            }
+          ],
+          accountIds: connectedAccounts.reduce((acc, curr) => {
+            acc[curr.platform] = curr._id || curr.id || "";
+            return acc;
+          }, {} as Record<string, string>)
+        })
+      });
+
+      if (res.ok) {
+        showToast("Video reel successfully posted and webhook comment listeners subscribed!", "success");
+        setVideoFile(null);
+        setVideoPreviewUrl(null);
+        setActiveTab("history");
+        fetchHistory(userId);
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to publish post through channels.");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(err instanceof Error ? err.message : "Error publishing post.", "error");
+    } finally {
+      setPublishing(false);
+      setUploadingMedia(false);
+    }
   };
 
   const getPlatformIcon = (platform: string) => {

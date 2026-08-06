@@ -9,6 +9,7 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { useToast } from "../layout";
+import { API_BASE_URL } from "../../../lib/api";
 
 // Typings for logs
 interface LogEntry {
@@ -58,6 +59,22 @@ interface MockMessage {
   escalated_at?: string;
 }
 
+interface BackendMessage {
+  id: string;
+  platform: "instagram" | "tiktok" | "whatsapp";
+  author_username?: string;
+  raw_content?: string;
+  language?: string;
+  intent?: string;
+  urgency?: number;
+  ai_reply?: string;
+  status?: string;
+  escalated_at?: string;
+  zernio_post_id?: string;
+  channel_message_id?: string;
+  created_at?: string;
+}
+
 export default function UnifiedMessagesPage() {
   const { showToast } = useToast();
   
@@ -65,77 +82,7 @@ export default function UnifiedMessagesPage() {
   const [activeTab, setActiveTab] = useState<"urgent" | "log">("urgent");
 
   // Local state for all conversations (Simulates database storage on frontend)
-  const [dbMessages, setDbMessages] = useState<MockMessage[]>([
-    {
-      id: "msg-1",
-      platform: "instagram",
-      username: "nairobi_chic",
-      originalText: "How much is the Cargo Hoodie? Do you have size L in stock? 😍",
-      detectedLang: "Detected: English",
-      intent: "QUESTION",
-      urgency: 4,
-      aiDraft: "Sema nairobi_chic! Cargo Hoodie yetu ni Ksh 2,800 na ukubwa wa size L uko kwa stock ready to ship. Utapenda ubora wake! Utapenda tufanye delivery leo? 😊",
-      status: "pending",
-      smsSent: false,
-      created_at: new Date(Date.now() - 3 * 60000).toISOString(),
-    },
-    {
-      id: "msg-2",
-      platform: "tiktok",
-      username: "kendy_k",
-      originalText: "mnapatikana wapi? niko kitengela mnaweza deliver leo?",
-      detectedLang: "Detected: Swahili + Sheng",
-      intent: "QUESTION",
-      urgency: 5,
-      aiDraft: "Sema kendy_k! Duka letu liko Nairobi CBD lakini tunafanya delivery Kitengela kupitia Rider au G4S kwa Ksh 300 pekee. Ukituma order sasa hivi itafika jioni hii! 🛵",
-      status: "pending",
-      smsSent: false,
-      created_at: new Date(Date.now() - 15 * 60000).toISOString(),
-    },
-    {
-      id: "msg-3",
-      platform: "whatsapp",
-      username: "+254 722 998 811",
-      originalText: "I placed an order yesterday and paid via M-Pesa but no one has confirmed yet. What is going on??",
-      detectedLang: "Detected: English",
-      intent: "COMPLAINT",
-      urgency: 9,
-      aiDraft: "Hello! We sincerely apologize for the delay. We are reviewing your payment transaction right now and our dispatch team will call you back in 5 minutes. Thank you for your patience.",
-      status: "escalated",
-      smsSent: true,
-      smsRecipient: "+254 712 *** 345",
-      smsTime: new Date(Date.now() - 45 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      created_at: new Date(Date.now() - 45 * 60000).toISOString(),
-      escalated_at: new Date(Date.now() - 45 * 60000).toISOString(),
-    },
-    {
-      id: "msg-4",
-      platform: "instagram",
-      username: "john_doe_99",
-      originalText: "Awesome designs! Keep up the good work guys.",
-      detectedLang: "Detected: English",
-      intent: "HYPE",
-      urgency: 1,
-      aiDraft: "Sema john_doe_99! Asante sana kwa support yako! Itutii motisha kuendelea kuboresha streetwear zetu. 🙏🔥",
-      status: "auto-replied",
-      smsSent: false,
-      aiReply: "Sema john_doe_99! Asante sana kwa support yako! Itutii motisha kuendelea kuboresha streetwear zetu. 🙏🔥",
-      created_at: new Date(Date.now() - 120 * 60000).toISOString(),
-    },
-    {
-      id: "msg-5",
-      platform: "tiktok",
-      username: "spambot_tiktok",
-      originalText: "👉 CLICK HERE TO GET 1000 FREE FOLLOWERS NOW!!! 👈",
-      detectedLang: "Detected: English",
-      intent: "SPAM",
-      urgency: 1,
-      aiDraft: "",
-      status: "skipped",
-      smsSent: false,
-      created_at: new Date(Date.now() - 180 * 60000).toISOString(),
-    }
-  ]);
+  const [dbMessages, setDbMessages] = useState<MockMessage[]>([]);
 
   const [urgentMessages, setUrgentMessages] = useState<UrgentMessage[]>([]);
   const [isUrgentLoading, setIsUrgentLoading] = useState(false);
@@ -210,19 +157,60 @@ export default function UnifiedMessagesPage() {
     setLogs(logMapped);
   }, [dbMessages]);
 
+  const fetchMessagesFromBackend = useCallback(async (silent = false) => {
+    if (!silent) {
+      setIsUrgentLoading(true);
+      setIsLogsLoading(true);
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = data.map((m: BackendMessage) => {
+          const isEscalated = m.status === "escalated";
+          const formattedSmsTime = m.escalated_at 
+            ? new Date(m.escalated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : "";
+          return {
+            id: m.id,
+            platform: m.platform,
+            username: m.author_username || "unknown",
+            originalText: m.raw_content || "",
+            detectedLang: m.language ? `Detected: ${m.language}` : "Detected: Swahili + Sheng",
+            intent: m.intent || "QUESTION",
+            urgency: m.urgency || 1,
+            aiDraft: m.ai_reply || "",
+            status: m.status || "pending",
+            smsSent: isEscalated,
+            smsRecipient: "+254 712 *** 345",
+            smsTime: formattedSmsTime,
+            created_at: m.created_at || new Date().toISOString(),
+            aiReply: m.ai_reply || "",
+            tokensUsed: 142,
+            zernioId: m.zernio_post_id || m.channel_message_id || m.id
+          };
+        });
+        setDbMessages(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to fetch messages:", err);
+    } finally {
+      setIsUrgentLoading(false);
+      setIsLogsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMessagesFromBackend();
+  }, [fetchMessagesFromBackend]);
+
   useEffect(() => {
     syncUIRecords();
   }, [syncUIRecords]);
 
   const handleSyncButton = () => {
-    setIsUrgentLoading(true);
-    setIsLogsLoading(true);
-    setTimeout(() => {
-      syncUIRecords();
-      setIsUrgentLoading(false);
-      setIsLogsLoading(false);
-      showToast("Inbox logs synchronized successfully!", "success");
-    }, 450);
+    fetchMessagesFromBackend();
+    showToast("Inbox logs synchronized successfully!", "success");
   };
 
   // Urgent actions handlers
@@ -230,20 +218,66 @@ export default function UnifiedMessagesPage() {
     setDbMessages(prev => prev.map(m => m.id === id ? { ...m, aiDraft: text } : m));
   };
 
-  const handleSendUrgent = (id: string, username: string, draftText: string, platform: string) => {
-    setDbMessages(prev => prev.map(m => m.id === id ? { ...m, status: "auto-replied", aiReply: draftText, urgency: 1, smsSent: false } : m));
-    showToast(`Reply sent to ${username} successfully via ${platform}!`, "success");
+  const handleSendUrgent = async (id: string, username: string, draftText: string, platform: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages/${id}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send",
+          replyText: draftText,
+          platform
+        })
+      });
+      if (res.ok) {
+        showToast(`Reply sent to ${username} successfully via ${platform}!`, "success");
+        fetchMessagesFromBackend(true);
+      } else {
+        showToast("Failed to post reply to social media.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error processing reply action.", "error");
+    }
   };
 
-  const handleDismissUrgent = (id: string, username: string) => {
-    setDbMessages(prev => prev.map(m => m.id === id ? { ...m, status: "skipped" } : m));
-    showToast(`Conversation with ${username} dismissed.`, "info");
-    setSelectedMessageId(null);
+  const handleDismissUrgent = async (id: string, username: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages/${id}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "dismiss"
+        })
+      });
+      if (res.ok) {
+        showToast(`Conversation with ${username} dismissed.`, "info");
+        setSelectedMessageId(null);
+        fetchMessagesFromBackend(true);
+      } else {
+        showToast("Failed to dismiss conversation.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error processing dismiss action.", "error");
+    }
   };
 
-  const handleMarkAllRead = () => {
-    setDbMessages(prev => prev.map(m => (m.status === "pending" || m.status === "escalated") ? { ...m, status: "auto-replied" } : m));
-    showToast("All urgent messages marked as read.", "success");
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages/mark-all-read`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        showToast("All urgent messages marked as read.", "success");
+        fetchMessagesFromBackend(true);
+      } else {
+        showToast("Failed to mark all read.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error marking all read.", "error");
+    }
   };
 
   // Filter urgent cards

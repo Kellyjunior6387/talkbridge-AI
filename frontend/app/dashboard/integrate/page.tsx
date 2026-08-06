@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { ArrowRight, AtSign, Camera, CheckCircle2, Loader2, Music2, Trash2 } from "lucide-react";
 import { useToast } from "../layout";
 import { supabase } from "../../../lib/supabase";
+import { API_BASE_URL } from "../../../lib/api";
 
 type Platform = "twitter" | "instagram" | "tiktok";
 
@@ -49,74 +50,110 @@ interface ConnectedAccount {
 
 export default function ConnectionsPage() {
   const { showToast } = useToast();
-  const [userEmail, setUserEmail] = useState("jane@threads.co.ke");
+  const [userEmail, setUserEmail] = useState("");
   const [businessName, setBusinessName] = useState("Threads Kenya");
-  const profileId = "zn-prof-8a302e83";
+  const [profileId, setProfileId] = useState("");
   const [activePlatform, setActivePlatform] = useState<Platform | null>(null);
   
-  // Local state for connected accounts (Bypasses backend database fetch)
-  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([
-    {
-      _id: "acc-1",
-      platform: "instagram",
-      username: "threads.ke",
-      displayName: "Instagram Business",
-      isActive: true
-    },
-    {
-      _id: "acc-2",
-      platform: "tiktok",
-      username: "threads_kenya",
-      displayName: "TikTok Creator Profile",
-      isActive: true
-    }
-  ]);
-  const isAccountsLoading = false;
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
+  const [isAccountsLoading, setIsAccountsLoading] = useState(true);
   const [isDisconnecting, setIsDisconnecting] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setUserEmail(session.user.email || "jane@threads.co.ke");
-        const meta = session.user.user_metadata || {};
-        setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
+  const fetchConnectedAccounts = useCallback(async () => {
+    setIsAccountsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/zernio/accounts`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.accounts || [];
+        setConnectedAccounts(list);
       }
-    });
+    } catch (err) {
+      console.error("Failed to load connected accounts:", err);
+    } finally {
+      setIsAccountsLoading(false);
+    }
   }, []);
 
-  const handleConnect = (platform: Platform) => {
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        const user = session.user;
+        setUserEmail(user.email || "");
+        const meta = user.user_metadata || {};
+        setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
+        
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/zernio/profiles/${user.id}`);
+          if (res.ok) {
+            const data = await res.json();
+            setProfileId(data.zernio_profile_id || "");
+          }
+        } catch (err) {
+          console.error("Failed to load user profile:", err);
+        }
+      }
+    });
+
+    fetchConnectedAccounts();
+  }, [fetchConnectedAccounts]);
+
+  const handleConnect = async (platform: Platform) => {
+    if (!profileId) {
+      showToast("Profile ID is not loaded yet.", "error");
+      return;
+    }
     setActivePlatform(platform);
     showToast(`Initializing secure OAuth link with ${platform}...`, "info");
 
-    setTimeout(() => {
-      const mockId = `acc-${Math.random().toString(36).substring(2, 9)}`;
-      const newAcc: ConnectedAccount = {
-        _id: mockId,
-        platform,
-        username: `${businessName.toLowerCase().replace(/\s+/g, "_")}_${platform}`,
-        displayName: `${platform.charAt(0).toUpperCase() + platform.slice(1)} Channel`,
-        isActive: true
-      };
-
-      setConnectedAccounts(prev => {
-        if (prev.some(a => a.platform === platform)) {
-          return prev;
-        }
-        return [...prev, newAcc];
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/zernio/connect/${platform}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileId,
+          redirectUrl: window.location.origin + "/dashboard/integrate"
+        })
       });
-
-      showToast(`${platform} channel successfully integrated!`, "success");
+      if (res.ok) {
+        const data = await res.json();
+        const authUrl = typeof data === "string" ? data : data.url || data.authUrl;
+        if (authUrl) {
+          window.location.href = authUrl;
+        } else {
+          showToast("Failed to retrieve connection URL.", "error");
+        }
+      } else {
+        const err = await res.json();
+        showToast(err.error || `Failed to connect ${platform}`, "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(`Error connecting platform: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
       setActivePlatform(null);
-    }, 1200);
+    }
   };
 
-  const handleDisconnect = (accountId: string) => {
+  const handleDisconnect = async (accountId: string) => {
     setIsDisconnecting(accountId);
-    setTimeout(() => {
-      setConnectedAccounts(prev => prev.filter((a) => a._id !== accountId));
-      showToast("Account channel disconnected successfully.", "success");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/zernio/accounts/${accountId}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        showToast("Account disconnected successfully.", "success");
+        fetchConnectedAccounts();
+      } else {
+        const err = await res.json();
+        showToast(err.error || "Failed to disconnect account.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error disconnecting account.", "error");
+    } finally {
       setIsDisconnecting(null);
-    }, 600);
+    }
   };
 
   const getPlatformIcon = (platformName: string) => {
