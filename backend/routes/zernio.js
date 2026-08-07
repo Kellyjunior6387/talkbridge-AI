@@ -65,7 +65,8 @@ router.get('/profiles/:userId', async (req, res) => {
 
 router.get('/accounts', async (req, res) => {
   try {
-    const accounts = await listConnectedAccounts();
+    const { profileId } = req.query;
+    const accounts = await listConnectedAccounts(profileId);
     return res.json(accounts);
   } catch (err) {
     log('error', `[Zernio API] list accounts failed: ${err.message}`);

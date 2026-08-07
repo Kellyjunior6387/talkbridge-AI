@@ -6,6 +6,7 @@ import zernioRouter from './routes/zernio.js';
 import testRouter from './routes/test.js';
 import { log } from './utils/logger.js';
 import { ensureMediaBucket } from './services/supabase.js';
+import { createWebhookSubscription, listWebhookSubscriptions } from './services/zernio.js';
 
 // Startup Security Checks
 const aiKey = process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY;
@@ -55,9 +56,60 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+async function ensureWebhookSubscriptions() {
+  const webhookUrl = process.env.WEBHOOK_URL;
+  if (!webhookUrl) {
+    log('warn', '[Startup] WEBHOOK_URL is not set in environment. Skipping auto webhook registration.');
+    return;
+  }
+
+  const cleanUrl = webhookUrl.trim();
+  const dmUrl = `${cleanUrl}/webhook/zernio/messages`;
+  const commentUrl = `${cleanUrl}/webhook/zernio`;
+
+  log('info', `[Startup] Checking Zernio webhook subscriptions...`);
+  try {
+    const response = await listWebhookSubscriptions();
+    const data = response?.data || response?.webhooks || response;
+    const existingHooks = Array.isArray(data) ? data : data?.webhooks || [];
+
+    const hasDmSub = existingHooks.some(hook => hook.url === dmUrl && (hook.events || []).includes('message.received'));
+    const hasCommentSub = existingHooks.some(hook => hook.url === commentUrl && (hook.events || []).includes('comment.received'));
+
+    if (!hasDmSub) {
+      // Register message.received webhook
+      await createWebhookSubscription({
+        name: 'TalkBridge DM Webhook',
+        url: dmUrl,
+        secret: 'talkbridge_secret_123',
+        events: ['message.received']
+      });
+      log('info', '[Startup] Zernio DM webhook (message.received) subscribed successfully.');
+    } else {
+      log('info', '[Startup] Zernio DM webhook (message.received) is already subscribed.');
+    }
+
+    if (!hasCommentSub) {
+      // Register comment.received webhook
+      await createWebhookSubscription({
+        name: 'TalkBridge Comment Webhook',
+        url: commentUrl,
+        secret: 'talkbridge_secret_123',
+        events: ['comment.received']
+      });
+      log('info', '[Startup] Zernio Comment webhook (comment.received) subscribed successfully.');
+    } else {
+      log('info', '[Startup] Zernio Comment webhook (comment.received) is already subscribed.');
+    }
+  } catch (err) {
+    log('error', `[Startup] Webhook subscription auto-registration failed: ${err.message}`);
+  }
+}
+
 app.listen(PORT, () => {
   log('info', `TalkBridge server running on port ${PORT}`);
   log('info', `Test simulate: POST http://localhost:${PORT}/test/simulate`);
   log('info', `Health check:  GET  http://localhost:${PORT}/health`);
   ensureMediaBucket();
+  ensureWebhookSubscriptions();
 });

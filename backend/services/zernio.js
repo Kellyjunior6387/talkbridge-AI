@@ -56,9 +56,14 @@ export async function getConnectUrlForPlatform({ platform, profileId, redirectUr
   return unwrapSdkResult(response);
 }
 
-export async function listConnectedAccounts() {
+export async function listConnectedAccounts(profileId) {
   const client = getZernioClient();
-  const response = await client.accounts.listAccounts();
+  const options = {};
+  const resolvedId = resolveProfileId(profileId);
+  if (resolvedId) {
+    options.query = { profileId: resolvedId };
+  }
+  const response = await client.accounts.listAccounts(options);
   return unwrapSdkResult(response);
 }
 
@@ -255,10 +260,64 @@ export async function publishCommentReply(replyText, accountId, commentId, postI
   }
 }
 
+/**
+ * Publishes a reply directly to a specific DM conversation
+ * Matches Zernio REST API reference: POST /v1/inbox/conversations/{conversationId}/messages
+ * @param {string} replyText - The reply content
+ * @param {string} accountId - The Zernio account ID
+ * @param {string} conversationId - The Zernio conversation ID
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function publishDirectMessageReply(replyText, accountId, conversationId) {
+  try {
+    const apiKey = process.env.ZERNIO_API_KEY;
+    if (!apiKey) {
+      throw new Error('Zernio API key is missing from environment variables');
+    }
+
+    if (!conversationId) {
+      throw new Error('Missing required conversationId parameter for Zernio message reply');
+    }
+
+    log('info', `[Zernio] Replying to conversation ${conversationId} using account ${accountId} via REST API...`);
+    
+    const url = `https://zernio.com/api/v1/inbox/conversations/${conversationId}/messages`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        accountId,
+        message: replyText
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Zernio API returned status ${response.status}: ${errText}`);
+    }
+
+    const resData = await response.json();
+    log('info', `[Zernio] Direct message reply published successfully. Response: ${JSON.stringify(resData)}`);
+    return resData.success || true;
+  } catch (err) {
+    log('error', `[Zernio] publishDirectMessageReply failed: ${err.message}`);
+    throw new Error(`Zernio direct message reply failed: ${err.message}`);
+  }
+}
+
 export async function deleteConnectedAccount(accountId) {
   const client = getZernioClient();
   const response = await client.accounts.deleteAccount({
     path: { accountId }
   });
+  return unwrapSdkResult(response);
+}
+
+export async function listWebhookSubscriptions() {
+  const client = getZernioClient();
+  const response = await client.webhooks.getWebhookSettings();
   return unwrapSdkResult(response);
 }

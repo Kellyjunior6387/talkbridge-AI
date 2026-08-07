@@ -107,7 +107,18 @@ function PublishContent() {
         }
       }
 
-      const accRes = await fetch(`${API_BASE_URL}/api/zernio/accounts`);
+      // Fetch the Zernio profile for the user
+      let profileId = "";
+      const profileRes = await fetch(`${API_BASE_URL}/api/zernio/profiles/${uid}`);
+      if (profileRes.ok) {
+        const profileData = await profileRes.json();
+        profileId = profileData.zernio_profile_id || "";
+      }
+
+      const accUrl = profileId
+        ? `${API_BASE_URL}/api/zernio/accounts?profileId=${profileId}`
+        : `${API_BASE_URL}/api/zernio/accounts`;
+      const accRes = await fetch(accUrl);
       if (accRes.ok) {
         const accData = await accRes.json();
         const list = Array.isArray(accData) ? accData : accData.accounts || [];

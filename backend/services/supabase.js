@@ -137,18 +137,22 @@ export async function updateMessage(id, updates) {
 /**
  * Retrieves the latest messages from the database
  * @param {number} limit - Number of records to return
+ * @param {string|null} userId - The optional user ID to filter messages by
  * @returns {Promise<Array>} List of messages sorted by created_at DESC
  */
-export async function getLatestMessages(limit = 20) {
+export async function getLatestMessages(limit = 20, userId = null) {
   return retryQuery(async () => {
     try {
       if (!supabase) {
         throw new Error('Supabase client is not initialized due to missing credentials');
       }
 
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
+      let query = supabase.from('messages').select('*');
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query
         .order('created_at', { ascending: false })
         .limit(limit);
 

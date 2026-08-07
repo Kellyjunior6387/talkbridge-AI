@@ -69,6 +69,7 @@ create table if not exists public.webhooks (
 -- Existing message log table used by the webhook simulator and dashboards.
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
   platform text not null,
   channel_message_id text,
   author_username text,
@@ -86,6 +87,7 @@ create table if not exists public.messages (
 );
 
 create index if not exists messages_created_at_idx on public.messages (created_at desc);
+create index if not exists messages_user_id_idx on public.messages (user_id);
 create index if not exists products_user_id_idx on public.products (user_id);
 create index if not exists products_zernio_profile_id_idx on public.products (zernio_profile_id);
 create index if not exists posts_user_id_idx on public.posts (user_id);

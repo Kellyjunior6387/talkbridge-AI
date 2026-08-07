@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useToast } from "../layout";
 import { API_BASE_URL } from "../../../lib/api";
+import { supabase } from "../../../lib/supabase";
 
 // Typings for logs
 interface LogEntry {
@@ -81,6 +82,9 @@ export default function UnifiedMessagesPage() {
   // Workspace tabs: "urgent" (Actions Required) or "log" (Auto-Reply History)
   const [activeTab, setActiveTab] = useState<"urgent" | "log">("urgent");
 
+  // Authenticated user ID state
+  const [userId, setUserId] = useState<string | null>(null);
+
   // Local state for all conversations (Simulates database storage on frontend)
   const [dbMessages, setDbMessages] = useState<MockMessage[]>([]);
 
@@ -95,6 +99,25 @@ export default function UnifiedMessagesPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "auto-replied" | "escalated" | "skipped">("all");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+
+  // Get active session on mount
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.id) {
+        setUserId(session.user.id);
+      }
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.id) {
+        setUserId(session.user.id);
+      } else {
+        setUserId(null);
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Sync state between dbMessages state templates and UI views
   const syncUIRecords = useCallback(() => {
@@ -157,13 +180,14 @@ export default function UnifiedMessagesPage() {
     setLogs(logMapped);
   }, [dbMessages]);
 
-  const fetchMessagesFromBackend = useCallback(async (silent = false) => {
+  const fetchMessagesFromBackend = useCallback(async (silent = false, currentUserId = userId) => {
+    if (!currentUserId) return;
     if (!silent) {
       setIsUrgentLoading(true);
       setIsLogsLoading(true);
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/test/messages`);
+      const res = await fetch(`${API_BASE_URL}/test/messages?userId=${currentUserId}`);
       if (res.ok) {
         const data = await res.json();
         const mapped = data.map((m: BackendMessage) => {
@@ -198,19 +222,23 @@ export default function UnifiedMessagesPage() {
       setIsUrgentLoading(false);
       setIsLogsLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    fetchMessagesFromBackend();
-  }, [fetchMessagesFromBackend]);
+    if (userId) {
+      fetchMessagesFromBackend(false, userId);
+    }
+  }, [userId, fetchMessagesFromBackend]);
 
   useEffect(() => {
     syncUIRecords();
   }, [syncUIRecords]);
 
   const handleSyncButton = () => {
-    fetchMessagesFromBackend();
-    showToast("Inbox logs synchronized successfully!", "success");
+    if (userId) {
+      fetchMessagesFromBackend(false, userId);
+      showToast("Inbox logs synchronized successfully!", "success");
+    }
   };
 
   // Urgent actions handlers

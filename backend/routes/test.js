@@ -2,7 +2,7 @@ import express from 'express';
 import { classifyAndReply } from '../services/gemini.js';
 import { publishReply } from '../services/zernio.js';
 import { escalateToAgent } from '../services/twilio.js';
-import { insertMessage, updateMessage, getLatestMessages, markAllMessagesRead } from '../services/supabase.js';
+import { supabase, insertMessage, updateMessage, getLatestMessages, markAllMessagesRead } from '../services/supabase.js';
 import { sanitizeMessage } from './webhook.js';
 import { log } from '../utils/logger.js';
 
@@ -26,6 +26,18 @@ router.post('/simulate', async (req, res) => {
       return res.status(400).json({ error: 'Message text is required for simulation' });
     }
 
+    // Resolve user ID
+    let userId = req.body.userId;
+    if (!userId) {
+      const { data: allProfiles } = await supabase
+        .from('user_profiles')
+        .select('user_id')
+        .limit(1);
+      if (allProfiles && allProfiles.length > 0) {
+        userId = allProfiles[0].user_id;
+      }
+    }
+
     // Step 1: Sanitize input
     const cleanMessage = sanitizeMessage(message);
 
@@ -35,6 +47,7 @@ router.post('/simulate', async (req, res) => {
 
     // Step 3: Save to Supabase (status = 'pending')
     const row = await insertMessage({
+      user_id: userId,
       platform,
       channel_message_id: `sim-${Date.now()}`,
       author_username: username,
@@ -113,8 +126,9 @@ router.post('/simulate', async (req, res) => {
  */
 router.get('/messages', async (req, res) => {
   try {
-    log('info', '[Simulation] Fetching latest 20 messages from Supabase...');
-    const messages = await getLatestMessages(20);
+    const { userId } = req.query;
+    log('info', `[Simulation] Fetching latest 20 messages from Supabase for user ${userId || 'all'}...`);
+    const messages = await getLatestMessages(20, userId);
     return res.json(messages);
   } catch (err) {
     log('error', `[Simulation] Failed to get latest messages: ${err.message}`);

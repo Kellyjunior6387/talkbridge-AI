@@ -59,10 +59,14 @@ export default function ConnectionsPage() {
   const [isAccountsLoading, setIsAccountsLoading] = useState(true);
   const [isDisconnecting, setIsDisconnecting] = useState<string | null>(null);
 
-  const fetchConnectedAccounts = useCallback(async () => {
+  const fetchConnectedAccounts = useCallback(async (pId?: string) => {
     setIsAccountsLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/zernio/accounts`);
+      const activeId = pId || profileId;
+      const url = activeId
+        ? `${API_BASE_URL}/api/zernio/accounts?profileId=${activeId}`
+        : `${API_BASE_URL}/api/zernio/accounts`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data) ? data : data.accounts || [];
@@ -73,7 +77,7 @@ export default function ConnectionsPage() {
     } finally {
       setIsAccountsLoading(false);
     }
-  }, []);
+  }, [profileId]);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -83,19 +87,22 @@ export default function ConnectionsPage() {
         const meta = user.user_metadata || {};
         setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
         
+        let pId = "";
         try {
           const res = await fetch(`${API_BASE_URL}/api/zernio/profiles/${user.id}`);
           if (res.ok) {
             const data = await res.json();
-            setProfileId(data.zernio_profile_id || "");
+            pId = data.zernio_profile_id || "";
+            setProfileId(pId);
           }
         } catch (err) {
           console.error("Failed to load user profile:", err);
         }
+
+        // Fetch accounts for the resolved profile ID
+        fetchConnectedAccounts(pId);
       }
     });
-
-    fetchConnectedAccounts();
   }, [fetchConnectedAccounts]);
 
   const handleConnect = async (platform: Platform) => {

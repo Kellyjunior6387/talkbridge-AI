@@ -58,9 +58,10 @@ export default function DashboardLayout({
 
   const [urgentCount, setUrgentCount] = useState(0);
 
-  const fetchUrgentCount = useCallback(async () => {
+  const fetchUrgentCount = useCallback(async (userId: string | null) => {
+    if (!userId) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/test/messages`);
+      const res = await fetch(`${API_BASE_URL}/test/messages?userId=${userId}`);
       if (res.ok) {
         const data = await res.json();
         const count = data.filter((m: { status?: string }) => m.status === "pending" || m.status === "escalated").length;
@@ -73,36 +74,44 @@ export default function DashboardLayout({
 
   useEffect(() => {
     let mounted = true;
+    let currentUserId: string | null = null;
 
     // Check active session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       if (session) {
+        currentUserId = session.user.id;
         setUserEmail(session.user.email || "");
         const meta = session.user.user_metadata || {};
         setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
         const name = meta.full_name || "Threads Kenya";
         setUserInitials(name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2));
-        fetchUrgentCount();
+        fetchUrgentCount(currentUserId);
       } else {
         router.push("/auth");
       }
       setLoadingSession(false);
     });
 
-    const interval = setInterval(fetchUrgentCount, 10000);
+    const interval = setInterval(() => {
+      if (currentUserId) {
+        fetchUrgentCount(currentUserId);
+      }
+    }, 10000);
 
     // Subscribe to auth state transitions
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
       if (session) {
+        currentUserId = session.user.id;
         setUserEmail(session.user.email || "");
         const meta = session.user.user_metadata || {};
         setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
         const name = meta.full_name || "Threads Kenya";
         setUserInitials(name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2));
-        fetchUrgentCount();
+        fetchUrgentCount(currentUserId);
       } else {
+        currentUserId = null;
         router.push("/auth");
       }
     });

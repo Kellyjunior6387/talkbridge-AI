@@ -19,9 +19,11 @@ function AuthContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [phone, setPhone] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showVerificationSent, setShowVerificationSent] = useState(false);
 
   // Set mode based on URL query param if present
   useEffect(() => {
@@ -44,12 +46,27 @@ function AuthContent() {
     try {
       if (isLogin) {
         // Sign in using email/password
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data: authData, error } = await supabase.auth.signInWithPassword({
           email: finalEmail,
           password: finalPassword
         });
         if (error) throw error;
-        router.push("/dashboard/urgent");
+
+        if (authData?.user) {
+          const { data: profile } = await supabase
+            .from("user_profiles")
+            .select("id")
+            .eq("user_id", authData.user.id)
+            .maybeSingle();
+
+          if (profile) {
+            router.push("/dashboard/messages");
+          } else {
+            router.push("/onboarding");
+          }
+        } else {
+          router.push("/onboarding");
+        }
       } else {
         // Sign up using email/password + metadata
         const { data, error } = await supabase.auth.signUp({
@@ -59,7 +76,8 @@ function AuthContent() {
             emailRedirectTo: `${window.location.origin}/auth`,
             data: {
               full_name: fullName,
-              business_name: businessName
+              business_name: businessName,
+              sms_phone: phone
             }
           }
         });
@@ -77,7 +95,7 @@ function AuthContent() {
           });
         }
 
-        router.push("/onboarding");
+        setShowVerificationSent(true);
       }
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "An authentication error occurred.");
@@ -128,17 +146,46 @@ function AuthContent() {
         {/* Divider */}
         <div className="border-t border-slate-100"></div>
 
-        {/* Header text */}
-        <div className="space-y-2 text-center">
-          <h2 className="font-display font-bold text-2xl text-slate-900">
-            {isLogin ? "Welcome back" : "Create your account"}
-          </h2>
-          <p className="text-xs text-slate-500">
-            {isLogin 
-              ? "Sign in to manage your unified inbox"
-              : "Start your 14-day free trial — no card required"}
-          </p>
-        </div>
+        {showVerificationSent ? (
+          <div className="space-y-6 text-center py-4 animate-fadeIn flex flex-col items-center">
+            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 mb-2">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2L11 13" />
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+              </svg>
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-display font-bold text-xl text-slate-900">Verify your email</h3>
+              <p className="text-sm text-slate-500">
+                We have sent a verification link to <strong className="text-slate-800">{email}</strong>.
+              </p>
+              <p className="text-xs text-slate-400 max-w-sm">
+                Please click the link in the email to verify and activate your account. Once verified, you will be redirected to the login page.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setShowVerificationSent(false);
+                setIsLogin(true);
+              }}
+              className="mt-4 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition-colors shadow-md shadow-blue-500/20"
+            >
+              Back to Login
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Header text */}
+            <div className="space-y-2 text-center">
+              <h2 className="font-display font-bold text-2xl text-slate-900">
+                {isLogin ? "Welcome back" : "Create your account"}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {isLogin 
+                  ? "Sign in to manage your unified inbox"
+                  : "Start your 14-day free trial — no card required"}
+              </p>
+            </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -168,6 +215,21 @@ function AuthContent() {
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
                 placeholder="Threads Kenya"
+                className="w-full px-4 py-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 text-sm focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600/30 transition-all duration-200"
+              />
+            </div>
+          )}
+
+          {/* Phone Number (Sign Up only) */}
+          {!isLogin && (
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Phone Number</label>
+              <input
+                type="tel"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+254 712 345 678"
                 className="w-full px-4 py-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 text-sm focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600/30 transition-all duration-200"
               />
             </div>
@@ -273,14 +335,16 @@ function AuthContent() {
           </button>
         </div>
 
-        {/* Bottom: Stats */}
-        <div className="border-t border-slate-100 pt-6 flex justify-around text-[11px] font-mono text-slate-400">
-          <span>5 platforms</span>
-          <span>&middot;</span>
-          <span>&lt; 4 seconds</span>
-          <span>&middot;</span>
-          <span>AI-powered</span>
-        </div>
+            {/* Bottom: Stats */}
+            <div className="border-t border-slate-100 pt-6 flex justify-around text-[11px] font-mono text-slate-400">
+              <span>5 platforms</span>
+              <span>&middot;</span>
+              <span>&lt; 4 seconds</span>
+              <span>&middot;</span>
+              <span>AI-powered</span>
+            </div>
+          </>
+        )}
 
       </div>
     </div>
