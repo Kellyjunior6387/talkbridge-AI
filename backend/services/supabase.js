@@ -20,6 +20,9 @@ CREATE TABLE messages (
 
 -- Enable realtime so the Next.js dashboard can subscribe
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+
+-- The Sentiment Insights feature (topics, message_topics, known_issues and the
+-- get_topic_daily_counts RPC) lives in a separate migration: db/sentiment-insights.sql
 */
 
 import { createClient } from '@supabase/supabase-js';
@@ -29,11 +32,11 @@ import { log } from '../utils/logger.js';
 // Polyfill WebSocket globally to satisfy Supabase SDK environment checks in Node.js < 22
 globalThis.WebSocket = ws;
 
-// Support both backend-only service keys and frontend public keys as fallbacks
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+// Support both backend-only service keys 
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-let supabase = null;
+export let supabase = null;
 
 if (supabaseUrl && supabaseServiceKey) {
   try {
@@ -137,18 +140,22 @@ export async function updateMessage(id, updates) {
 /**
  * Retrieves the latest messages from the database
  * @param {number} limit - Number of records to return
+ * @param {string|null} userId - The optional user ID to filter messages by
  * @returns {Promise<Array>} List of messages sorted by created_at DESC
  */
-export async function getLatestMessages(limit = 20) {
+export async function getLatestMessages(limit = 20, userId = null) {
   return retryQuery(async () => {
     try {
       if (!supabase) {
         throw new Error('Supabase client is not initialized due to missing credentials');
       }
 
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
+      let query = supabase.from('messages').select('*');
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -163,6 +170,210 @@ export async function getLatestMessages(limit = 20) {
   }).catch(err => {
     log('error', `[Supabase] getLatestMessages exhausted all retries: ${err.message}`);
     throw new Error(`Supabase select failed: ${err.message}`);
+  });
+}
+
+// =====================================================================
+// Sentiment Insights data access (topics / message_topics / known_issues)
+// =====================================================================
+
+function requireClient() {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized due to missing credentials');
+  }
+}
+
+/**
+ * Returns the current topic vocabulary (slug + label), most-seen first.
+ */
+export async function getTopics(limit = 300) {
+  return retryQuery(async () => {
+    requireClient();
+    const { data, error } = await supabase
+      .from('topics')
+      .select('*')
+      .order('occurrence_count', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  }).catch(err => {
+    log('error', `[Supabase] getTopics failed: ${err.message}`);
+    return [];
+  });
+}
+
+/**
+ * Inserts a new topic or bumps an existing one's counters (read-modify-write;
+ * fine at SME message volume). Keeps a small rolling set of example phrases.
+ */
+export async function upsertTopic(topic) {
+  return retryQuery(async () => {
+    requireClient();
+    const { data: existing, error: selErr } = await supabase
+      .from('topics')
+      .select('slug, example_phrases, occurrence_count')
+      .eq('slug', topic.slug)
+      .maybeSingle();
+    if (selErr) throw selErr;
+
+    const now = new Date().toISOString();
+    if (existing) {
+      const phrases = new Set([...(existing.example_phrases || [])]);
+      if (topic.keyword) phrases.add(topic.keyword);
+      const { error } = await supabase
+        .from('topics')
+        .update({
+          occurrence_count: (existing.occurrence_count || 0) + 1,
+          last_seen_at: now,
+          example_phrases: Array.from(phrases).slice(-8)
+        })
+        .eq('slug', topic.slug);
+      if (error) throw error;
+      return { created: false };
+    }
+
+    const { error } = await supabase.from('topics').insert([{
+      slug: topic.slug,
+      label: topic.label || topic.slug,
+      description: topic.description || null,
+      category: topic.category || 'other',
+      polarity: topic.polarity || 'neutral',
+      created_by: topic.createdBy || 'llm',
+      example_phrases: topic.keyword ? [topic.keyword] : [],
+      occurrence_count: 1,
+      last_seen_at: now
+    }]);
+    if (error) throw error;
+    return { created: true };
+  }).catch(err => {
+    log('error', `[Supabase] upsertTopic(${topic.slug}) failed: ${err.message}`);
+    return { created: false, error: err.message };
+  });
+}
+
+/**
+ * Records a (message, topic) tag row.
+ */
+export async function insertMessageTopic(row) {
+  return retryQuery(async () => {
+    requireClient();
+    const { error } = await supabase.from('message_topics').insert([row]);
+    if (error) throw error;
+  }).catch(err => {
+    log('error', `[Supabase] insertMessageTopic failed: ${err.message}`);
+  });
+}
+
+/**
+ * Calls the get_topic_daily_counts RPC → per-day tag counts for every
+ * (product_ref, topic_slug) over a trailing window.
+ */
+export async function getTopicDailyCounts(daysBack = 8) {
+  return retryQuery(async () => {
+    requireClient();
+    const { data, error } = await supabase.rpc('get_topic_daily_counts', { days_back: daysBack });
+    if (error) throw error;
+    return data || [];
+  }).catch(err => {
+    log('error', `[Supabase] getTopicDailyCounts failed: ${err.message}`);
+    return [];
+  });
+}
+
+/**
+ * Returns the active (non-resolved) known issue for a product+topic, if any.
+ * Used to dedupe spikes and suppress repeat escalations.
+ */
+export async function getActiveKnownIssue(productRef, topicSlug) {
+  return retryQuery(async () => {
+    requireClient();
+    const { data, error } = await supabase
+      .from('known_issues')
+      .select('*')
+      .eq('product_ref', productRef)
+      .eq('topic_slug', topicSlug)
+      .neq('status', 'resolved')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data || null;
+  }).catch(err => {
+    log('error', `[Supabase] getActiveKnownIssue failed: ${err.message}`);
+    return null;
+  });
+}
+
+export async function createKnownIssue(row) {
+  return retryQuery(async () => {
+    requireClient();
+    const { data, error } = await supabase.from('known_issues').insert([row]).select().single();
+    if (error) throw error;
+    return data;
+  }).catch(err => {
+    log('error', `[Supabase] createKnownIssue failed: ${err.message}`);
+    throw new Error(`Supabase createKnownIssue failed: ${err.message}`);
+  });
+}
+
+export async function updateKnownIssue(id, updates) {
+  return retryQuery(async () => {
+    requireClient();
+    const { data, error } = await supabase
+      .from('known_issues')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }).catch(err => {
+    log('error', `[Supabase] updateKnownIssue(${id}) failed: ${err.message}`);
+    throw new Error(`Supabase updateKnownIssue failed: ${err.message}`);
+  });
+}
+
+/**
+ * Lists known issues, newest activity first. Optional filters: status, review_status.
+ */
+export async function getKnownIssues({ status, reviewStatus, limit = 100 } = {}) {
+  return retryQuery(async () => {
+    requireClient();
+    let query = supabase.from('known_issues').select('*');
+    if (status) query = query.eq('status', status);
+    if (reviewStatus) query = query.eq('review_status', reviewStatus);
+    const { data, error } = await query
+      .order('last_seen_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  }).catch(err => {
+    log('error', `[Supabase] getKnownIssues failed: ${err.message}`);
+    return [];
+  });
+}
+
+/**
+ * Returns representative raw messages for a product+topic spike, used to feed
+ * the Gemma known-issue summarizer.
+ */
+export async function getSampleMessagesForTopic(productRef, topicSlug, limit = 8) {
+  return retryQuery(async () => {
+    requireClient();
+    const { data, error } = await supabase
+      .from('message_topics')
+      .select('messages(raw_content)')
+      .eq('product_ref', productRef)
+      .eq('topic_slug', topicSlug)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data || [])
+      .map(r => r.messages?.raw_content)
+      .filter(Boolean);
+  }).catch(err => {
+    log('error', `[Supabase] getSampleMessagesForTopic failed: ${err.message}`);
+    return [];
   });
 }
 
@@ -190,5 +401,91 @@ export async function markAllMessagesRead() {
       throw err;
     }
   });
+}
+
+/**
+ * Generic row upsert helper for product/profile tables.
+ * @param {string} table
+ * @param {Object|Array<Object>} rows
+ * @param {string} [onConflict]
+ */
+export async function upsertRows(table, rows, onConflict) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized due to missing credentials');
+  }
+
+  const payload = Array.isArray(rows) ? rows : [rows];
+  const query = supabase.from(table).upsert(payload, onConflict ? { onConflict } : undefined).select();
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function listRows(table, filters = {}) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized due to missing credentials');
+  }
+
+  let query = supabase.from(table).select('*');
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && value !== '') {
+      query = query.eq(key, value);
+    }
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) {
+    throw error;
+  }
+  return data || [];
+}
+
+export async function getRow(table, filters = {}) {
+  const rows = await listRows(table, filters);
+  return rows[0] || null;
+}
+
+export async function ensureMediaBucket() {
+  if (!supabase) return;
+  try {
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+    if (listError) {
+      log('warn', `[Supabase Storage] Failed to list buckets: ${listError.message}`);
+      return;
+    }
+    const hasMedia = buckets.some(b => b.id === 'media' || b.name === 'media');
+    if (!hasMedia) {
+      log('info', '[Supabase Storage] Media bucket not found. Attempting to create it...');
+      const { error: createError } = await supabase.storage.createBucket('media', {
+        public: true,
+        fileSizeLimit: 52428800 // 50MB
+      });
+      if (createError) {
+        log('error', `[Supabase Storage] Failed to create media bucket: ${createError.message}`);
+      } else {
+        log('info', '[Supabase Storage] Media bucket successfully created and configured as public.');
+      }
+    } else {
+      log('info', '[Supabase Storage] Media bucket verified.');
+    }
+  } catch (err) {
+    log('error', `[Supabase Storage] Error verifying media bucket: ${err.message}`);
+  }
+}
+
+export async function createSignedUploadUrl(filePath) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized due to missing credentials');
+  }
+  const { data, error } = await supabase.storage
+    .from('media')
+    .createSignedUploadUrl(filePath);
+
+  if (error) {
+    throw error;
+  }
+  return data; // returns { signedUrl, token, path }
 }
 

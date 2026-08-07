@@ -1,9 +1,18 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Search } from "lucide-react";
+import { 
+  Search, 
+  PhoneCall, 
+  Send, 
+  RefreshCw, 
+  CheckCircle2
+} from "lucide-react";
 import { useToast } from "../layout";
+import { API_BASE_URL } from "../../../lib/api";
+import { supabase } from "../../../lib/supabase";
 
+// Typings for logs
 interface LogEntry {
   id: string;
   platform: "instagram" | "tiktok" | "whatsapp";
@@ -18,91 +27,297 @@ interface LogEntry {
   zernioId: string;
 }
 
-interface DBMessage {
+interface UrgentMessage {
+  id: string;
+  platform: "instagram" | "tiktok" | "whatsapp";
+  username: string;
+  timestamp: string;
+  urgency: number;
+  intent: string;
+  originalText: string;
+  detectedLang: string;
+  aiDraft: string;
+  smsSent: boolean;
+  smsRecipient?: string;
+  smsTime?: string;
+}
+
+interface MockMessage {
+  id: string;
+  platform: "instagram" | "tiktok" | "whatsapp";
+  username: string;
+  originalText: string;
+  detectedLang: string;
+  intent: string;
+  urgency: number;
+  aiDraft: string;
+  status: string;
+  smsSent: boolean;
+  smsRecipient?: string;
+  smsTime?: string;
+  created_at: string;
+  aiReply?: string;
+  escalated_at?: string;
+}
+
+interface BackendMessage {
   id: string;
   platform: "instagram" | "tiktok" | "whatsapp";
   author_username?: string;
-  raw_content: string;
+  raw_content?: string;
+  language?: string;
   intent?: string;
   urgency?: number;
   ai_reply?: string;
   status?: string;
-  zernio_post_id?: string;
-  created_at: string;
   escalated_at?: string;
+  zernio_post_id?: string;
+  channel_message_id?: string;
+  created_at?: string;
 }
 
-export default function MessageLogPage() {
+export default function UnifiedMessagesPage() {
   const { showToast } = useToast();
+  
+  // Workspace tabs: "urgent" (Actions Required) or "log" (Auto-Reply History)
+  const [activeTab, setActiveTab] = useState<"urgent" | "log">("urgent");
+
+  // Authenticated user ID state
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Local state for all conversations (Simulates database storage on frontend)
+  const [dbMessages, setDbMessages] = useState<MockMessage[]>([]);
+
+  const [urgentMessages, setUrgentMessages] = useState<UrgentMessage[]>([]);
+  const [isUrgentLoading, setIsUrgentLoading] = useState(false);
+  const [urgentFilter, setUrgentFilter] = useState<"all" | "complaint" | "escalated">("all");
+
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [platformFilter, setPlatformFilter] = useState<"all" | "instagram" | "tiktok" | "whatsapp">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "auto-replied" | "escalated" | "skipped">("all");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
 
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Get active session on mount
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.id) {
+        setUserId(session.user.id);
+      }
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.id) {
+        setUserId(session.user.id);
+      } else {
+        setUserId(null);
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
-  // Fetch messages logs from backend database
-  const fetchLogs = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("http://localhost:4000/test/messages");
-      if (!res.ok) throw new Error("Backend connection failed");
-      const data = await res.json();
-      
-      const mapped = data.map((m: DBMessage) => {
-        // Calculate relative age
+  // Sync state between dbMessages state templates and UI views
+  const syncUIRecords = useCallback(() => {
+    // 1. Process Urgent Messages (status === 'pending' || status === 'escalated')
+    const urgentMapped = dbMessages
+      .filter((m) => m.status === "pending" || m.status === "escalated")
+      .map((m) => {
         const ageMin = Math.max(1, Math.round((Date.now() - new Date(m.created_at).getTime()) / 60000));
-        let relativeTime = `${ageMin} min ago`;
-        if (ageMin >= 60 && ageMin < 1440) relativeTime = `${Math.round(ageMin/60)} hours ago`;
-        if (ageMin >= 1440) relativeTime = `${Math.round(ageMin/1440)} days ago`;
-
-        // Normalize status
-        let normalStatus: LogEntry["status"] = "auto-replied";
-        if (m.status === "escalated") normalStatus = "escalated";
-        else if (m.status === "human_reviewed" && m.intent === "spam") normalStatus = "skipped";
-        else if (m.status === "human_reviewed" || m.status === "pending") normalStatus = "auto-replied"; // fallback or edited
+        const relativeTime = ageMin < 60 ? `${ageMin} min ago` : `${Math.round(ageMin/60)} hours ago`;
         
-        // Normalize intent
-        let normalIntent: LogEntry["intent"] = "question";
-        if (m.intent === "complaint") normalIntent = "complaint";
-        else if (m.intent === "purchase_intent" || m.intent === "purchase") normalIntent = "purchase";
-        else if (m.intent === "hype") normalIntent = "hype";
-        else if (m.intent === "spam") normalIntent = "spam";
-
         return {
           id: m.id,
           platform: m.platform,
-          username: m.author_username || "anonymous",
-          originalText: m.raw_content,
-          intent: normalIntent,
-          urgency: m.urgency || 1,
-          aiReply: m.ai_reply || "",
-          status: normalStatus,
-          time: relativeTime,
-          // Claude token counts details (mock details mapped per token scale)
-          tokensUsed: m.ai_reply ? Math.floor(m.raw_content.length * 0.4 + m.ai_reply.length * 0.8 + 80) : 45,
-          zernioId: m.zernio_post_id || "none"
+          username: m.username,
+          timestamp: relativeTime,
+          urgency: m.urgency,
+          intent: m.intent,
+          originalText: m.originalText,
+          detectedLang: m.detectedLang,
+          aiDraft: m.aiDraft,
+          smsSent: m.smsSent,
+          smsRecipient: m.smsRecipient,
+          smsTime: m.smsTime
         };
       });
-      setLogs(mapped);
-    } catch (err) {
-      showToast(`Error fetching logs: ${err instanceof Error ? err.message : String(err)}`, "error");
-    } finally {
-      setIsLoading(false);
+    setUrgentMessages(urgentMapped);
+
+    // 2. Process Auto-Reply Logs History
+    const logMapped = dbMessages.map((m) => {
+      const ageMin = Math.max(1, Math.round((Date.now() - new Date(m.created_at).getTime()) / 60000));
+      let relativeTime = `${ageMin} min ago`;
+      if (ageMin >= 60 && ageMin < 1440) relativeTime = `${Math.round(ageMin/60)} hours ago`;
+      if (ageMin >= 1440) relativeTime = `${Math.round(ageMin/1440)} days ago`;
+
+      let normalStatus: LogEntry["status"] = "auto-replied";
+      if (m.status === "escalated") normalStatus = "escalated";
+      else if (m.status === "skipped") normalStatus = "skipped";
+      else if (m.status === "pending") normalStatus = "auto-replied"; // fallback or pre-reply
+
+      let normalIntent: LogEntry["intent"] = "question";
+      if (m.intent.toLowerCase() === "complaint") normalIntent = "complaint";
+      else if (m.intent.toLowerCase() === "purchase") normalIntent = "purchase";
+      else if (m.intent.toLowerCase() === "hype") normalIntent = "hype";
+      else if (m.intent.toLowerCase() === "spam") normalIntent = "spam";
+
+      return {
+        id: m.id,
+        platform: m.platform,
+        username: m.username,
+        originalText: m.originalText,
+        intent: normalIntent,
+        urgency: m.urgency,
+        aiReply: m.aiReply || m.aiDraft || "",
+        status: normalStatus,
+        time: relativeTime,
+        tokensUsed: m.aiReply ? Math.floor(m.originalText.length * 0.4 + m.aiReply.length * 0.8 + 80) : 45,
+        zernioId: `zn-req-${m.id}`
+      };
+    });
+    setLogs(logMapped);
+  }, [dbMessages]);
+
+  const fetchMessagesFromBackend = useCallback(async (silent = false, currentUserId = userId) => {
+    if (!currentUserId) return;
+    if (!silent) {
+      setIsUrgentLoading(true);
+      setIsLogsLoading(true);
     }
-  }, [showToast]);
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages?userId=${currentUserId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = data.map((m: BackendMessage) => {
+          const isEscalated = m.status === "escalated";
+          const formattedSmsTime = m.escalated_at 
+            ? new Date(m.escalated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : "";
+          return {
+            id: m.id,
+            platform: m.platform,
+            username: m.author_username || "unknown",
+            originalText: m.raw_content || "",
+            detectedLang: m.language ? `Detected: ${m.language}` : "Detected: Swahili + Sheng",
+            intent: m.intent || "QUESTION",
+            urgency: m.urgency || 1,
+            aiDraft: m.ai_reply || "",
+            status: m.status || "pending",
+            smsSent: isEscalated,
+            smsRecipient: "+254 712 *** 345",
+            smsTime: formattedSmsTime,
+            created_at: m.created_at || new Date().toISOString(),
+            aiReply: m.ai_reply || "",
+            tokensUsed: 142,
+            zernioId: m.zernio_post_id || m.channel_message_id || m.id
+          };
+        });
+        setDbMessages(mapped);
+      }
+    } catch (err) {
+      console.error("Failed to fetch messages:", err);
+    } finally {
+      setIsUrgentLoading(false);
+      setIsLogsLoading(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+    if (userId) {
+      fetchMessagesFromBackend(false, userId);
+    }
+  }, [userId, fetchMessagesFromBackend]);
 
+  useEffect(() => {
+    syncUIRecords();
+  }, [syncUIRecords]);
 
-  const handleRowClick = (id: string) => {
-    setExpandedRow(prev => (prev === id ? null : id));
+  const handleSyncButton = () => {
+    if (userId) {
+      fetchMessagesFromBackend(false, userId);
+      showToast("Inbox logs synchronized successfully!", "success");
+    }
   };
 
-  // Filter logic
+  // Urgent actions handlers
+  const handleDraftChange = (id: string, text: string) => {
+    setDbMessages(prev => prev.map(m => m.id === id ? { ...m, aiDraft: text } : m));
+  };
+
+  const handleSendUrgent = async (id: string, username: string, draftText: string, platform: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages/${id}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send",
+          replyText: draftText,
+          platform
+        })
+      });
+      if (res.ok) {
+        showToast(`Reply sent to ${username} successfully via ${platform}!`, "success");
+        fetchMessagesFromBackend(true);
+      } else {
+        showToast("Failed to post reply to social media.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error processing reply action.", "error");
+    }
+  };
+
+  const handleDismissUrgent = async (id: string, username: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages/${id}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "dismiss"
+        })
+      });
+      if (res.ok) {
+        showToast(`Conversation with ${username} dismissed.`, "info");
+        setSelectedMessageId(null);
+        fetchMessagesFromBackend(true);
+      } else {
+        showToast("Failed to dismiss conversation.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error processing dismiss action.", "error");
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/test/messages/mark-all-read`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        showToast("All urgent messages marked as read.", "success");
+        fetchMessagesFromBackend(true);
+      } else {
+        showToast("Failed to mark all read.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error marking all read.", "error");
+    }
+  };
+
+  // Filter urgent cards
+  const filteredUrgent = urgentMessages.filter(m => {
+    if (urgentFilter === "complaint") return m.intent === "COMPLAINT" || m.intent === "PAYMENT ERROR";
+    if (urgentFilter === "escalated") return m.smsSent === true;
+    return true;
+  });
+
+
+
+  // Filter history logs
   const filteredLogs = logs.filter((log) => {
     const matchesSearch = 
       log.username.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -115,241 +330,485 @@ export default function MessageLogPage() {
   });
 
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-6xl mx-auto pb-12">
+    <div className="p-6 md:p-8 space-y-6 max-w-6xl mx-auto pb-16 text-slate-800">
       
-      {/* Header Row */}
+      {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="font-display font-bold text-2xl md:text-3xl text-white">Message Log</h1>
-          <p className="text-sm text-[#7A8BAD] mt-1">All messages TalkBridge handled automatically across your platforms.</p>
+          <h1 className="font-display font-bold text-2xl md:text-3xl text-slate-900">Conversations & Messages</h1>
+          <p className="text-sm text-slate-500 mt-1">Review urgent messages requiring approval or browse auto-reply logs.</p>
         </div>
 
-        {/* Search & Actions */}
-        <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
-          <div className="relative flex-grow sm:flex-grow-0">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7A8BAD]" size={16} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search comments..."
-              className="w-full sm:w-64 pl-10 pr-4 py-2.5 rounded-full bg-[#0F1624] border border-[#1C2640] text-sm text-[#F0F4FF] focus:outline-none focus:border-[#4DFFC3] transition-all"
-            />
-          </div>
+        <div className="flex gap-2 w-full sm:w-auto shrink-0">
           <button 
-            onClick={() => fetchLogs()} 
-            className="p-2.5 rounded-full border border-[#1C2640] hover:border-[#4DFFC3] text-xs font-semibold font-display text-white bg-[#0F1624] transition-all shrink-0"
+            onClick={handleSyncButton}
+            className="flex items-center justify-center gap-1.5 px-4.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-all shadow-sm"
           >
-            Sync Logs
+            <RefreshCw size={14} className="text-slate-500 animate-spin" style={{ animationDuration: '6s' }} /> Sync Messages
           </button>
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="p-4 bg-[#0F1624] border border-[#1C2640] rounded-xl flex flex-wrap gap-6 items-center">
-        {/* Platforms */}
-        <div className="space-y-1.5">
-          <span className="block text-[10px] font-mono text-[#7A8BAD] uppercase tracking-wider">PLATFORM</span>
-          <div className="flex gap-1.5">
-            {["all", "instagram", "tiktok", "whatsapp"].map((plat) => (
-              <button
-                key={plat}
-                onClick={() => setPlatformFilter(plat as "all" | "instagram" | "tiktok" | "whatsapp")}
-                className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all ${
-                  platformFilter === plat
-                    ? "bg-[#4DFFC3] text-[#080B14]"
-                    : "bg-[#080B14] border border-[#1C2640] text-[#7A8BAD] hover:text-white"
-                }`}
-              >
-                {plat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Statuses */}
-        <div className="space-y-1.5">
-          <span className="block text-[10px] font-mono text-[#7A8BAD] uppercase tracking-wider">STATUS</span>
-          <div className="flex gap-1.5">
-            {["all", "auto-replied", "escalated", "skipped"].map((stat) => (
-              <button
-                key={stat}
-                onClick={() => setStatusFilter(stat as "all" | "auto-replied" | "escalated" | "skipped")}
-                className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all ${
-                  statusFilter === stat
-                    ? "bg-[#4DFFC3] text-[#080B14]"
-                    : "bg-[#080B14] border border-[#1C2640] text-[#7A8BAD] hover:text-white"
-                }`}
-              >
-                {stat.replace("-", " ")}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* WORKSPACE SUB-NAVIGATION TABS */}
+      <div className="flex border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab("urgent")}
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all relative ${
+            activeTab === "urgent"
+              ? "border-blue-600 text-blue-600 font-bold"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          Urgent Action Required
+          {urgentMessages.length > 0 && (
+            <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white animate-pulse">
+              {urgentMessages.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("log")}
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === "log"
+              ? "border-blue-600 text-blue-600 font-bold"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          Auto-Reply Log
+        </button>
       </div>
 
-      {/* Table View Container */}
-      <div className="bg-[#0F1624] border border-[#1C2640] rounded-xl overflow-hidden shadow-lg">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-[#7A8BAD] font-mono text-sm">
-            <span className="w-8 h-8 rounded-full border-2 border-[#4DFFC3] border-t-transparent animate-spin" />
-            <span>Fetching message history...</span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#1C2640] bg-[#080B14]/40 font-mono text-[11px] uppercase tracking-wider text-[#7A8BAD]">
-                  <th className="py-4 px-6">Platform</th>
-                  <th className="py-4 px-6">Message</th>
-                  <th className="py-4 px-6">Intent</th>
-                  <th className="py-4 px-6 text-center">Urgency</th>
-                  <th className="py-4 px-6">AI Reply</th>
-                  <th className="py-4 px-6">Status</th>
-                  <th className="py-4 px-6">Time</th>
-                  <th className="py-4 px-6"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1C2640]/55">
-                {filteredLogs.length > 0 ? (
-                  filteredLogs.map((log) => {
-                    const isExpanded = expandedRow === log.id;
-                    const isTikTok = log.platform === "tiktok";
-                    const isInstagram = log.platform === "instagram";
-                    const isWhatsApp = log.platform === "whatsapp";
+      {/* URGENT ACTIONS CONTENT */}
+      {activeTab === "urgent" && (
+        <div className="space-y-6">
+          {/* Sub Filters for Urgent messages */}
+          <div className="flex justify-between items-center flex-wrap gap-4">
+            <div className="flex gap-2">
+              {["all", "complaint", "escalated"].map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setUrgentFilter(f as "all" | "complaint" | "escalated")}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all ${
+                    urgentFilter === f
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/10"
+                      : "bg-white border border-slate-200 text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {f} ({
+                    f === "all" ? urgentMessages.length :
+                    f === "complaint" ? urgentMessages.filter(m => m.intent === "COMPLAINT" || m.intent === "PAYMENT ERROR").length :
+                    urgentMessages.filter(m => m.smsSent).length
+                  })
+                </button>
+              ))}
+            </div>
 
+            {urgentMessages.length > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                className="px-4 py-1.5 rounded-full border border-slate-200 hover:border-red-500 hover:text-red-500 text-xs font-semibold bg-white text-slate-700 transition-all shadow-sm"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+
+          {isUrgentLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500 font-mono text-sm">
+              <span className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+              <span>Fetching actions required...</span>
+            </div>
+          ) : (
+            <div className="space-y-6 animate-fadeIn">
+              {filteredUrgent.length > 0 ? (
+                (() => {
+                  const activeMsg = filteredUrgent.find(m => m.id === selectedMessageId);
+
+                  // If no message is selected, show the full list of conversations
+                  if (!activeMsg) {
                     return (
-                      <React.Fragment key={log.id}>
-                        {/* Standard Row */}
-                        <tr
-                          onClick={() => handleRowClick(log.id)}
-                          className="hover:bg-[#162033]/50 cursor-pointer transition-colors duration-150"
-                        >
-                          {/* Platform column */}
-                          <td className="py-4 px-6 text-xs font-semibold text-white whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <span className={`w-6 h-6 rounded-full flex items-center justify-center border shrink-0 ${
+                      <div className="space-y-3">
+                        {filteredUrgent.map((msg) => {
+                          const isTikTok = msg.platform === "tiktok";
+                          const isInstagram = msg.platform === "instagram";
+                          const isWhatsApp = msg.platform === "whatsapp";
+
+                          return (
+                            <div
+                              key={msg.id}
+                              onClick={() => setSelectedMessageId(msg.id)}
+                              className="p-5 cursor-pointer transition-all duration-150 flex items-start gap-4 hover:border-blue-650 hover:shadow-md border border-slate-200 rounded-xl bg-white"
+                            >
+                              {/* Platform Icon Badge */}
+                              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border text-xs font-bold ${
                                 isTikTok 
                                   ? "bg-[#FF0050]/10 border-[#FF0050]/20 text-[#FF0050]" 
                                   : isInstagram 
                                   ? "bg-[#E1306C]/10 border-[#E1306C]/20 text-[#E1306C]"
                                   : "bg-[#25D366]/10 border-[#25D366]/20 text-[#25D366]"
                               }`}>
-                                {isTikTok && <span className="font-bold text-[9px]">TT</span>}
-                                {isInstagram && <span className="font-bold text-[9px]">IG</span>}
-                                {isWhatsApp && <span className="font-bold text-[9px]">WA</span>}
-                              </span>
-                              <span className="capitalize">{log.platform}</span>
-                            </div>
-                          </td>
-
-                          {/* Message Column */}
-                          <td className="py-4 px-6 text-sm text-[#F0F4FF] max-w-[180px] truncate" title={log.originalText}>
-                            <span className="font-mono text-xs block text-[#7A8BAD] mb-0.5">{log.username}</span>
-                            {log.originalText}
-                          </td>
-
-                          {/* Intent Column */}
-                          <td className="py-4 px-6 text-xs whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase ${
-                              log.intent === "complaint" 
-                                ? "bg-[#FF6B6B]/10 text-[#FF6B6B] border border-[#FF6B6B]/20"
-                                : log.intent === "purchase"
-                                ? "bg-[#F5A623]/10 text-[#F5A623] border border-[#F5A623]/20"
-                                : log.intent === "hype"
-                                ? "bg-[#4DFFC3]/10 text-[#4DFFC3] border border-[#4DFFC3]/20"
-                                : log.intent === "spam"
-                                ? "bg-[#7A8BAD]/10 text-[#7A8BAD] border border-[#7A8BAD]/20"
-                                : "bg-[#7B6EF6]/10 text-[#7B6EF6] border border-[#7B6EF6]/20"
-                            }`}>
-                              {log.intent}
-                            </span>
-                          </td>
-
-                          {/* Urgency Column */}
-                          <td className="py-4 px-6 text-xs text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                log.urgency >= 7 ? "bg-[#FF6B6B]" : log.urgency >= 4 ? "bg-[#F5A623]" : "bg-[#4DFFC3]"
-                              }`} />
-                              <span className="font-mono text-[#F0F4FF]">{log.urgency}/10</span>
-                            </div>
-                          </td>
-
-                          {/* AI Reply Column */}
-                          <td className="py-4 px-6 text-[12px] font-mono text-[#7A8BAD] max-w-[160px] truncate">
-                            {log.aiReply || "—"}
-                          </td>
-
-                          {/* Status Column */}
-                          <td className="py-4 px-6 text-xs whitespace-nowrap font-medium">
-                            {log.status === "auto-replied" && <span className="text-[#4DFFC3]">✓ Auto-replied</span>}
-                            {log.status === "escalated" && <span className="text-[#F5A623]">⚠ Escalated</span>}
-                            {log.status === "skipped" && <span className="text-[#7A8BAD]">— Skipped</span>}
-                          </td>
-
-                          {/* Time Column */}
-                          <td className="py-4 px-6 text-xs text-[#7A8BAD] whitespace-nowrap">
-                            {log.time}
-                          </td>
-
-                          {/* Toggle Icon */}
-                          <td className="py-4 px-6 text-right font-mono">
-                            {isExpanded ? "[^]" : "[v]"}
-                          </td>
-                        </tr>
-
-                        {/* Expanded Accordion Details */}
-                        {isExpanded && (
-                          <tr className="bg-[#080B14]/30">
-                            <td colSpan={8} className="py-4 px-6 border-b border-[#1C2640] space-y-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                  <span className="block text-[10px] font-mono text-[#7A8BAD] uppercase tracking-wider">FULL ORIGINAL MESSAGE</span>
-                                  <p className="text-sm text-[#F0F4FF] bg-[#0F1624] p-3 rounded-lg border border-[#1C2640] leading-relaxed">
-                                    {log.originalText}
-                                  </p>
-                                </div>
-                                <div className="space-y-1">
-                                  <span className="block text-[10px] font-mono text-[#7A8BAD] uppercase tracking-wider">AI POSTED RESPONSE</span>
-                                  <p className="text-sm text-[#F0F4FF] bg-[#0F1624] p-3 rounded-lg border border-[#1C2640] leading-relaxed italic">
-                                    {log.aiReply || "No reply was posted for this event (Spam filter/Manual skip)."}
-                                  </p>
-                                </div>
+                                {isTikTok && "TT"}
+                                {isInstagram && "IG"}
+                                {isWhatsApp && "WA"}
                               </div>
 
-                              <div className="flex flex-wrap gap-6 text-[11px] font-mono text-[#7A8BAD] border-t border-[#1C2640]/50 pt-3">
-                                <span>Tokens utilized: <strong className="text-white">{log.tokensUsed}</strong></span>
-                                <span>&middot;</span>
-                                <span>Zernio Request ID: <strong className="text-white">{log.zernioId}</strong></span>
+                              {/* Message details snippet */}
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex justify-between items-baseline gap-2">
+                                  <span className="text-sm font-bold text-slate-900">{msg.username}</span>
+                                  <span className="text-xs text-slate-400 font-mono shrink-0">{msg.timestamp}</span>
+                                </div>
+                                <p className="text-sm text-slate-600 truncate font-semibold">{msg.originalText}</p>
+                                <div className="flex gap-2 pt-1">
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-red-50 text-red-650 border border-red-100 uppercase">
+                                    Urgency {msg.urgency}/10
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-orange-50 text-orange-655 border border-orange-100 uppercase">
+                                    {msg.intent}
+                                  </span>
+                                </div>
                               </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
+                            </div>
+                          );
+                        })}
+                      </div>
                     );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-sm text-[#7A8BAD]">
-                      No messages logged. Generate sandbox runs in the Urgent dashboard tab to populate logs!
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  }
 
-        {/* Pagination footer */}
-        <div className="p-4 bg-[#080B14]/40 border-t border-[#1C2640] flex items-center justify-between text-xs text-[#7A8BAD] font-mono">
-          <span>Showing 1–{filteredLogs.length} of {filteredLogs.length}</span>
-          <div className="flex gap-2">
-            <button disabled className="px-3 py-1.5 rounded bg-[#080B14] border border-[#1C2640] opacity-50 cursor-not-allowed">Previous</button>
-            <button disabled className="px-3 py-1.5 rounded bg-[#080B14] border border-[#1C2640] opacity-50 cursor-not-allowed">Next</button>
+                  // If a message is selected, show the full-page details
+                  const isTikTok = activeMsg.platform === "tiktok";
+                  const isInstagram = activeMsg.platform === "instagram";
+                  const isWhatsApp = activeMsg.platform === "whatsapp";
+
+                  return (
+                    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-between min-h-[480px] space-y-6">
+                      
+                      {/* Detail Header with Back Button */}
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setSelectedMessageId(null)}
+                            className="px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-all shadow-sm flex items-center gap-1 shrink-0"
+                          >
+                            ← Back to Inbox
+                          </button>
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border text-[10px] font-bold ${
+                              isTikTok 
+                                ? "bg-[#FF0050]/10 border-[#FF0050]/20 text-[#FF0050]" 
+                                : isInstagram 
+                                ? "bg-[#E1306C]/10 border-[#E1306C]/20 text-[#E1306C]"
+                                : "bg-[#25D366]/10 border-[#25D366]/20 text-[#25D366]"
+                            }`}>
+                              {isTikTok && "TT"}
+                              {isInstagram && "IG"}
+                              {isWhatsApp && "WA"}
+                            </div>
+                            <div>
+                              <span className="text-sm font-bold text-slate-900 block leading-tight">{activeMsg.username}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">Platform: <span className="capitalize font-semibold text-slate-650">{activeMsg.platform}</span> &middot; Received {activeMsg.timestamp}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-1.5 shrink-0 ml-auto sm:ml-0">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-red-50 text-red-650 border border-red-100 uppercase">
+                            Urgency {activeMsg.urgency}/10
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-orange-50 text-orange-655 border border-orange-100 uppercase">
+                            {activeMsg.intent}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Message Box */}
+                      <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg space-y-1.5">
+                        <span className="block text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider">Original Message</span>
+                        <p className="text-sm text-slate-800 leading-relaxed font-semibold">{activeMsg.originalText}</p>
+                        <p className="font-mono text-[9px] text-slate-400 uppercase tracking-widest font-bold">{activeMsg.detectedLang}</p>
+                      </div>
+
+                      {/* AI Draft Response Editor */}
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-[10px] font-mono">
+                          <span className="text-indigo-650 font-bold tracking-wider flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 inline-block animate-pulse" />
+                            AI DRAFTED RESPONSE
+                          </span>
+                          <span className="text-slate-400 font-semibold">{activeMsg.aiDraft.length} / 500 chars</span>
+                        </div>
+                        
+                        <textarea
+                          value={activeMsg.aiDraft}
+                          onChange={(e) => handleDraftChange(activeMsg.id, e.target.value)}
+                          rows={5}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600/20 transition-all font-medium resize-none"
+                        />
+                      </div>
+
+                      {/* Escalation alert info */}
+                      {activeMsg.smsSent && (
+                        <div className="p-3 bg-orange-50/50 rounded-lg border-l-2 border-orange-500 flex items-center gap-2 text-xs text-slate-650">
+                          <PhoneCall size={13} className="text-orange-500 shrink-0" />
+                          <span>
+                            SMS alert pushed to agent (<strong className="text-slate-850">{activeMsg.smsRecipient}</strong>) at {activeMsg.smsTime}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Footer Actions */}
+                      <div className="flex justify-end gap-3 border-t border-slate-100 pt-4 shrink-0 bg-white">
+                        <button
+                          onClick={() => handleDismissUrgent(activeMsg.id, activeMsg.username)}
+                          className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-850 transition-colors"
+                        >
+                          Dismiss / Ignore
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleSendUrgent(activeMsg.id, activeMsg.username, activeMsg.aiDraft, activeMsg.platform);
+                            setSelectedMessageId(null);
+                          }}
+                          className="px-5 py-2 text-xs font-bold font-display bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-all hover:shadow-[0_4px_12px_rgba(37,99,235,0.25)] flex items-center gap-1.5"
+                        >
+                          Send Draft Reply <Send size={12} />
+                        </button>
+                      </div>
+
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 bg-white border border-dashed border-slate-200 rounded-2xl p-8 shadow-sm">
+                  <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center text-green-600 shadow-sm">
+                    <CheckCircle2 size={36} strokeWidth={2} />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-display font-bold text-xl text-slate-900">You&apos;re all caught up</h3>
+                    <p className="text-sm text-slate-500 max-w-sm mx-auto">
+                      No urgent messages requiring human moderation. TalkBridge is handling inbox comments automatically!
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* AUTO-REPLY LOGS CONTENT */}
+      {activeTab === "log" && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Filter and search bar */}
+          <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
+            
+            {/* Left side filters */}
+            <div className="flex flex-wrap gap-4 items-center bg-white border border-slate-200 p-3 rounded-xl shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">Platform:</span>
+                <div className="flex gap-1">
+                  {["all", "instagram", "tiktok", "whatsapp"].map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setPlatformFilter(p as "all" | "instagram" | "tiktok" | "whatsapp")}
+                      className={`px-2.5 py-1 rounded-full text-xs capitalize transition-all ${
+                        platformFilter === p
+                          ? "bg-blue-600 text-white font-semibold"
+                          : "text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-4 w-px bg-slate-200 hidden sm:block" />
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">Status:</span>
+                <div className="flex gap-1">
+                  {["all", "auto-replied", "escalated", "skipped"].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setStatusFilter(s as "all" | "auto-replied" | "escalated" | "skipped")}
+                      className={`px-2.5 py-1 rounded-full text-xs capitalize transition-all ${
+                        statusFilter === s
+                          ? "bg-blue-600 text-white font-semibold"
+                          : "text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      {s.replace("-", " ")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right side search bar */}
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search logs..."
+                className="w-full lg:w-64 pl-10 pr-4 py-2 rounded-full border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-650 transition-all shadow-sm"
+              />
+            </div>
+          </div>
+
+          {/* Table history */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            {isLogsLoading ? (
+              <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-500 font-mono text-sm">
+                <span className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+                <span>Synchronizing logs...</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                      <th className="py-4 px-6 font-bold">Conversation</th>
+                      <th className="py-4 px-6 font-bold">Message & Response</th>
+                      <th className="py-4 px-6 font-bold">Analysis</th>
+                      <th className="py-4 px-6 font-bold">Status</th>
+                      <th className="py-4 px-6 font-bold"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredLogs.length > 0 ? (
+                      filteredLogs.map((log) => {
+                        const isExpanded = expandedRow === log.id;
+                        const isTikTok = log.platform === "tiktok";
+                        const isInstagram = log.platform === "instagram";
+                        const isWhatsApp = log.platform === "whatsapp";
+
+                        return (
+                          <React.Fragment key={log.id}>
+                            <tr
+                              onClick={() => setExpandedRow(prev => (prev === log.id ? null : log.id))}
+                              className="hover:bg-slate-50/80 cursor-pointer transition-colors duration-150"
+                            >
+                              {/* 1. Conversation */}
+                              <td className="py-3.5 px-6 whitespace-nowrap">
+                                <div className="flex items-center gap-2.5">
+                                  <span className={`w-6 h-6 rounded-full flex items-center justify-center border shrink-0 text-[8px] font-bold ${
+                                    isTikTok 
+                                      ? "bg-[#FF0050]/10 border-[#FF0050]/20 text-[#FF0050]" 
+                                      : isInstagram 
+                                      ? "bg-[#E1306C]/10 border-[#E1306C]/20 text-[#E1306C]"
+                                      : "bg-[#25D366]/10 border-[#25D366]/20 text-[#25D366]"
+                                  }`}>
+                                    {isTikTok && "TT"}
+                                    {isInstagram && "IG"}
+                                    {isWhatsApp && "WA"}
+                                  </span>
+                                  <div>
+                                    <span className="font-mono text-xs font-semibold text-slate-800 block leading-tight">{log.username}</span>
+                                    <span className="text-[10px] text-slate-400 block mt-0.5">{log.time}</span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* 2. Message & Response */}
+                              <td className="py-3.5 px-6 max-w-[280px] min-w-[200px]">
+                                <p className="text-xs text-slate-700 truncate font-semibold mb-0.5">{log.originalText}</p>
+                                <p className="text-[11px] font-mono text-slate-400 truncate">{log.aiReply || "—"}</p>
+                              </td>
+
+                              {/* 3. Analysis */}
+                              <td className="py-3.5 px-6 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase shrink-0 ${
+                                    log.intent === "complaint" 
+                                      ? "bg-red-50 text-red-655 border border-red-100"
+                                      : log.intent === "purchase"
+                                      ? "bg-orange-50 text-orange-655 border border-orange-100"
+                                      : log.intent === "hype"
+                                      ? "bg-blue-50 text-blue-600 border border-blue-100"
+                                      : log.intent === "spam"
+                                      ? "bg-slate-100 text-slate-500 border border-slate-200"
+                                      : "bg-indigo-50 text-indigo-650 border border-indigo-100"
+                                  }`}>
+                                    {log.intent}
+                                  </span>
+                                  <div className="flex items-center gap-1 text-[11px]">
+                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                      log.urgency >= 7 ? "bg-red-500" : log.urgency >= 4 ? "bg-orange-500" : "bg-blue-500"
+                                    }`} />
+                                    <span className="font-mono text-slate-550">{log.urgency}/10</span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* 4. Status */}
+                              <td className="py-3.5 px-6 text-xs whitespace-nowrap font-semibold">
+                                {log.status === "auto-replied" && <span className="text-blue-600">✓ Auto-replied</span>}
+                                {log.status === "escalated" && <span className="text-orange-550">⚠ Escalated</span>}
+                                {log.status === "skipped" && <span className="text-slate-450">— Skipped</span>}
+                              </td>
+
+                              {/* 5. Toggle */}
+                              <td className="py-3.5 px-6 text-right text-xs text-slate-400 font-mono">
+                                {isExpanded ? "[^]" : "[v]"}
+                              </td>
+                            </tr>
+
+                            {/* Details Details */}
+                            {isExpanded && (
+                              <tr className="bg-slate-50/50">
+                                <td colSpan={5} className="py-4 px-6 border-b border-slate-200/60 space-y-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                      <span className="block text-[10px] font-mono font-bold text-slate-400 uppercase">FULL ORIGINAL MESSAGE</span>
+                                      <p className="text-sm text-slate-800 bg-white p-3 rounded-lg border border-slate-200 leading-relaxed font-semibold">
+                                        {log.originalText}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <span className="block text-[10px] font-mono font-bold text-slate-400 uppercase">AI POSTED RESPONSE</span>
+                                      <p className="text-sm text-slate-800 bg-white p-3 rounded-lg border border-slate-200 leading-relaxed italic font-semibold">
+                                        {log.aiReply || "No reply was posted for this event (Spam filter/Manual skip)."}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-6 text-[10px] font-mono text-slate-400 border-t border-slate-200/50 pt-3">
+                                    <span>Tokens utilized: <strong className="text-slate-700">{log.tokensUsed}</strong></span>
+                                    <span>&middot;</span>
+                                    <span>Zernio Request ID: <strong className="text-slate-700">{log.zernioId}</strong></span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-sm text-slate-500">
+                          No messages logged. Trigger simulation runs above to generate conversation events!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-mono">
+              <span>Showing 1–{filteredLogs.length} of {filteredLogs.length}</span>
+              <div className="flex gap-2">
+                <button disabled className="px-3 py-1.5 rounded bg-white border border-slate-200 opacity-50 cursor-not-allowed">Previous</button>
+                <button disabled className="px-3 py-1.5 rounded bg-white border border-slate-200 opacity-50 cursor-not-allowed">Next</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
     </div>
   );
