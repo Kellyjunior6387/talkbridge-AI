@@ -4,16 +4,18 @@ import React, { useState, useEffect, createContext, useContext, useCallback } fr
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
-  MessageSquare, 
-  Package, 
-  Video, 
-  Share2, 
-  BarChart2, 
-  Settings, 
-  LogOut, 
-  CheckCircle, 
-  X, 
-  Info 
+  AlertCircle,
+  MessageSquare,
+  Package,
+  TrendingUp,
+  Video,
+  Share2,
+  BarChart2,
+  Settings,
+  LogOut,
+  CheckCircle,
+  X,
+  Info
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { API_BASE_URL } from "../../lib/api";
@@ -156,6 +158,12 @@ export default function DashboardLayout({
       name: "Products",
       path: "/dashboard/products",
       icon: Package,
+      badge: 0
+    },
+    {
+      name: "Insights",
+      path: "/dashboard/insights",
+      icon: TrendingUp,
       badge: 0
     },
     {

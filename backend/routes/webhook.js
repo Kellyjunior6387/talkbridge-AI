@@ -3,6 +3,7 @@ import { classifyAndReply } from '../services/gemini.js';
 import { publishReply, publishCommentReply, publishDirectMessageReply } from '../services/zernio.js';
 import { escalateToAgent } from '../services/twilio.js';
 import { supabase, insertMessage, updateMessage, getRow } from '../services/supabase.js';
+import { recordMessageTopics, findActiveIssueForTopics } from '../services/insights.js';
 import { log } from '../utils/logger.js';
 
 const router = express.Router();
@@ -175,31 +176,45 @@ router.post('/tiktok', (req, res) => {
         return;
       }
 
+      // Step 4b: Sentiment Insights — extract comparable topics & grow vocabulary
+      const { productRef, topics } = await recordMessageTopics({
+        messageId: rowId,
+        messageText,
+        sentiment
+      });
+
       if (urgency >= 7) {
-        // Resolve user phone number
-        const recipientPhone = await resolveUserPhoneNumber(payload);
+        // If a tracked known issue already covers this, the brand is handling it —
+        // attach quietly instead of firing yet another human escalation.
+        const coveringIssue = await findActiveIssueForTopics(productRef, topics);
+        if (coveringIssue) {
+          log('info', `[Webhook] Urgency ${urgency} but covered by known issue "${coveringIssue.title}" — escalation suppressed, auto-replying.`);
+        } else {
+          // Resolve user phone number
+          const recipientPhone = await resolveUserPhoneNumber(payload);
 
-        // Call Twilio to send SMS alert to human agent
-        await escalateToAgent({
-          platform,
-          authorUsername,
-          messageText,
-          urgency,
-          intent,
-          aiReply: reply,
-          recipientPhone
-        });
+          // Call Twilio to send SMS alert to human agent
+          await escalateToAgent({
+            platform,
+            authorUsername,
+            messageText,
+            urgency,
+            intent,
+            aiReply: reply,
+            recipientPhone
+          });
 
-        // Update Supabase status
-        await updateMessage(rowId, {
-          status: 'escalated',
-          escalated_at: new Date().toISOString()
-        });
-        log('warn', `[Webhook] High urgency (${urgency}/10) — Escalated to Twilio agent.`);
-        return;
+          // Update Supabase status
+          await updateMessage(rowId, {
+            status: 'escalated',
+            escalated_at: new Date().toISOString()
+          });
+          log('warn', `[Webhook] High urgency (${urgency}/10) — Escalated to Twilio agent.`);
+          return;
+        }
       }
 
-      // Urgency < 7 AND intent !== 'spam' -> Publish reply via Zernio
+      // Auto-reply via Zernio (low urgency, or high urgency already covered by a known issue)
       try {
         const zernioPostId = await publishReply(reply, platform);
         await updateMessage(rowId, {
@@ -322,30 +337,42 @@ router.post('/zernio', (req, res) => {
         return;
       }
 
+      // Step 4b: Sentiment Insights — extract comparable topics & grow vocabulary
+      const { productRef, topics } = await recordMessageTopics({
+        messageId: rowId,
+        messageText,
+        sentiment
+      });
+
       if (urgency >= 7) {
-        // Resolve user phone number
-        const recipientPhone = await resolveUserPhoneNumber(payload);
+        const coveringIssue = await findActiveIssueForTopics(productRef, topics);
+        if (coveringIssue) {
+          log('info', `[Zernio Webhook] Urgency ${urgency} but covered by known issue "${coveringIssue.title}" — escalation suppressed, replying.`);
+        } else {
+          // Resolve user phone number
+          const recipientPhone = await resolveUserPhoneNumber(payload);
 
-        // Escalation alert via Twilio
-        await escalateToAgent({
-          platform,
-          authorUsername,
-          messageText,
-          urgency,
-          intent,
-          aiReply: reply,
-          recipientPhone
-        });
+          // Escalation alert via Twilio
+          await escalateToAgent({
+            platform,
+            authorUsername,
+            messageText,
+            urgency,
+            intent,
+            aiReply: reply,
+            recipientPhone
+          });
 
-        await updateMessage(rowId, {
-          status: 'escalated',
-          escalated_at: new Date().toISOString()
-        });
-        log('warn', `[Zernio Webhook] High urgency (${urgency}/10) — Escalated to Twilio agent.`);
-        return;
+          await updateMessage(rowId, {
+            status: 'escalated',
+            escalated_at: new Date().toISOString()
+          });
+          log('warn', `[Zernio Webhook] High urgency (${urgency}/10) — Escalated to Twilio agent.`);
+          return;
+        }
       }
 
-      // Urgency < 7 AND intent !== 'spam' -> Direct reply via Zernio
+      // Direct reply via Zernio (low urgency, or high urgency already covered by a known issue)
       if (accountId && commentId) {
         try {
           await publishCommentReply(reply, accountId, commentId, postId);
