@@ -1,7 +1,7 @@
 import express from 'express';
 import { classifyAndReply } from '../services/gemini.js';
 import { publishReply, publishCommentReply, publishDirectMessageReply } from '../services/zernio.js';
-import { escalateToAgent } from '../services/twilio.js';
+import { escalateToAgent } from '../services/africastalking.js';
 import { supabase, insertMessage, updateMessage, getRow } from '../services/supabase.js';
 import { recordMessageTopics, findActiveIssueForTopics } from '../services/insights.js';
 import { log } from '../utils/logger.js';
@@ -193,7 +193,7 @@ router.post('/tiktok', (req, res) => {
           // Resolve user phone number
           const recipientPhone = await resolveUserPhoneNumber(payload);
 
-          // Call Twilio to send SMS alert to human agent
+          // Call Africa's Talking to send SMS alert to human agent
           await escalateToAgent({
             platform,
             authorUsername,
@@ -209,7 +209,7 @@ router.post('/tiktok', (req, res) => {
             status: 'escalated',
             escalated_at: new Date().toISOString()
           });
-          log('warn', `[Webhook] High urgency (${urgency}/10) — Escalated to Twilio agent.`);
+          log('warn', `[Webhook] High urgency (${urgency}/10) — Escalated to Africa's Talking agent.`);
           return;
         }
       }
@@ -352,7 +352,7 @@ router.post('/zernio', (req, res) => {
           // Resolve user phone number
           const recipientPhone = await resolveUserPhoneNumber(payload);
 
-          // Escalation alert via Twilio
+          // Escalation alert via Africa's Talking
           await escalateToAgent({
             platform,
             authorUsername,
@@ -367,7 +367,7 @@ router.post('/zernio', (req, res) => {
             status: 'escalated',
             escalated_at: new Date().toISOString()
           });
-          log('warn', `[Zernio Webhook] High urgency (${urgency}/10) — Escalated to Twilio agent.`);
+          log('warn', `[Zernio Webhook] High urgency (${urgency}/10) — Escalated to Africa's Talking agent.`);
           return;
         }
       }

@@ -7,7 +7,8 @@ import { supabase } from "../../lib/supabase";
 import { API_BASE_URL } from "../../lib/api";
 
 interface ConnectedAccount {
-  _id: string;
+  _id?: string;
+  id?: string;
   platform: string;
   username?: string;
 }
@@ -70,11 +71,14 @@ export default function OnboardingPage() {
         // Disconnect
         const account = connectedAccounts.find(acc => acc.platform === platform);
         if (account) {
-          const res = await fetch(`${API_BASE_URL}/api/zernio/accounts/${account._id}`, {
-            method: "DELETE"
-          });
-          if (res.ok) {
-            await fetchConnectedAccounts(profileId);
+          const accountId = account._id || account.id;
+          if (accountId) {
+            const res = await fetch(`${API_BASE_URL}/api/zernio/accounts/${accountId}`, {
+              method: "DELETE"
+            });
+            if (res.ok) {
+              await fetchConnectedAccounts(profileId);
+            }
           }
         }
       } else {

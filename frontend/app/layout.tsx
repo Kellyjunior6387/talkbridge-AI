@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "TalkBridge AI - Unified Intelligent Inbox & AI Communication Bridge",
-  description: "Unify TikTok, Instagram, WhatsApp, SMS, and voice into a single intelligent inbox. Powered by Claude AI, Zernio API, ElevenLabs, and Twilio.",
+  description: "Unify TikTok, Instagram, WhatsApp, SMS, and voice into a single intelligent inbox. Powered by Claude AI, Zernio API, ElevenLabs, and Africa's Talking.",
   keywords: ["TalkBridge AI", "AI Inbox", "Omnichannel Messaging", "Hackathon 2026", "Zernio API", "Claude AI", "Customer Support Automation"],
   authors: [{ name: "BrickLabs AI" }],
 };

@@ -34,11 +34,11 @@ const TECH_STACK: TechItem[] = [
     logoClass: "group-hover:text-[#FFB347] font-semibold italic",
   },
   {
-    name: "Twilio",
+    name: "Africa's Talking",
     role: "SMS Escalation Gateway",
-    brandColor: "group-hover:border-[#F22F46]/40",
-    hoverBg: "group-hover:bg-[#F22F46]/5",
-    logoClass: "group-hover:text-[#F22F46] font-black tracking-tighter",
+    brandColor: "group-hover:border-[#1F7A43]/40",
+    hoverBg: "group-hover:bg-[#1F7A43]/5",
+    logoClass: "group-hover:text-[#1F7A43] font-bold tracking-tight",
   },
   {
     name: "Supabase",

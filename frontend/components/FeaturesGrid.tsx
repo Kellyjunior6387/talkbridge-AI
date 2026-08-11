@@ -33,7 +33,7 @@ const FEATURES: FeatureItem[] = [
   },
   {
     title: "Instant Escalation",
-    description: "Urgent messages reach a human agent via Twilio SMS in seconds.",
+    description: "Urgent messages reach a human agent via Africa's Talking SMS in seconds.",
     icon: Zap,
   },
   {

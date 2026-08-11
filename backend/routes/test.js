@@ -1,7 +1,7 @@
 import express from 'express';
 import { classifyAndReply } from '../services/gemini.js';
 import { publishReply } from '../services/zernio.js';
-import { escalateToAgent } from '../services/twilio.js';
+import { escalateToAgent } from '../services/africastalking.js';
 import { supabase, insertMessage, updateMessage, getLatestMessages, markAllMessagesRead } from '../services/supabase.js';
 import { recordMessageTopics } from '../services/insights.js';
 import { sanitizeMessage } from './webhook.js';
@@ -75,7 +75,7 @@ router.post('/simulate', async (req, res) => {
 
     let action = 'auto_replied';
     let zernioPostId = null;
-    let twilioSent = false;
+    let africastalkingSent = false;
 
     // Step 4: Route based on urgency
     if (classification.intent === 'spam') {
@@ -84,9 +84,9 @@ router.post('/simulate', async (req, res) => {
       log('info', '[Simulation] Route Action: Spam detected. Marked as human_reviewed.');
     } else if (classification.urgency >= 7) {
       action = 'escalated';
-      log('warn', `[Simulation] Route Action: High urgency (${classification.urgency}/10). Sending Twilio alert...`);
+      log('warn', `[Simulation] Route Action: High urgency (${classification.urgency}/10). Sending Africa's Talking alert...`);
       
-      const twilioSid = await escalateToAgent({
+      const atResponse = await escalateToAgent({
         platform,
         authorUsername: username,
         messageText: cleanMessage,
@@ -95,7 +95,7 @@ router.post('/simulate', async (req, res) => {
         aiReply: classification.reply
       });
       
-      twilioSent = !!twilioSid;
+      africastalkingSent = !!atResponse;
       await updateMessage(row.id, {
         status: 'escalated',
         escalated_at: new Date().toISOString()
@@ -123,7 +123,8 @@ router.post('/simulate', async (req, res) => {
       action,
       supabase_id: row.id,
       zernio_post_id: zernioPostId,
-      twilio_sent: twilioSent,
+      twilio_sent: africastalkingSent,
+      africastalking_sent: africastalkingSent,
       product_ref: insights.productRef,
       topics: insights.topics.map(t => ({ slug: t.slug, label: t.label, keyword: t.keyword, is_new: t.isNew }))
     });

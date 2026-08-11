@@ -9,7 +9,7 @@ import {
   Zap, 
   PhoneCall, 
   Package, 
-  BarChart2, 
+  Share2, 
   Check 
 } from "lucide-react";
 
@@ -131,11 +131,11 @@ export default function LandingPage() {
             {/* Feature 6 */}
             <div className="bg-white border border-slate-100 rounded-xl p-6 transition-all duration-300 hover:border-blue-600 hover:shadow-lg hover:shadow-blue-600/5 group">
               <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 mb-5 group-hover:scale-105 transition-transform">
-                <BarChart2 size={22} strokeWidth={1.5} />
+                <Share2 size={22} strokeWidth={1.5} />
               </div>
-              <h3 className="font-display font-bold text-[16px] text-slate-900 mb-2">Usage Dashboard</h3>
+              <h3 className="font-display font-bold text-[16px] text-slate-900 mb-2">Multi-platform Posting</h3>
               <p className="text-[13px] text-slate-600 leading-relaxed">
-                Track every reply, token used, and escalation in real time.
+                Draft and publish posts or updates to Instagram, TikTok, and Twitter simultaneously.
               </p>
             </div>
           </div>
