@@ -4,8 +4,8 @@ import React, { useState, useEffect, createContext, useContext, useCallback } fr
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
-  MessageSquare, 
-  Package, 
+  MessageSquare,
+  Package,
   TrendingUp,
   Video,
   Share2,
