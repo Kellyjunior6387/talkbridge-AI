@@ -17,30 +17,29 @@ export async function sendSms(phoneNumbers, message) {
       return { status: 'mock_success', message: 'API Key missing' };
     }
 
-    const payload = {
-      username,
-      message,
-      phoneNumbers
-    };
+    const bodyParams = new URLSearchParams();
+    bodyParams.append('username', username);
+    bodyParams.append('to', phoneNumbers.join(','));
+    bodyParams.append('message', message);
 
     if (senderId) {
-      payload.senderId = senderId;
+      bodyParams.append('from', senderId);
     }
 
     log('info', `[Africa's Talking] Sending SMS to ${phoneNumbers.length} recipient(s): "${message.slice(0, 50)}..."`);
 
     const url = username === 'sandbox'
-      ? 'https://api.sandbox.africastalking.com/version1/messaging/bulk'
-      : 'https://api.africastalking.com/version1/messaging/bulk';
+      ? 'https://api.sandbox.africastalking.com/version1/messaging'
+      : 'https://api.africastalking.com/version1/messaging';
 
     const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
         'apiKey': apiKey
       },
-      body: JSON.stringify(payload)
+      body: bodyParams.toString()
     });
 
     const resText = await res.text();
@@ -76,7 +75,7 @@ export async function escalateToAgent({
   aiReply,
   recipientPhone
 }) {
-  const recipient = recipientPhone || process.env.TWILIO_AGENT_NUMBER || process.env.AFRICASTALKING_RECIPIENT;
+  const recipient = recipientPhone || process.env.AFRICASTALKING_RECIPIENT;
   if (!recipient) {
     log('error', '[Africa\'s Talking] No agent recipient phone number configured.');
     return null;

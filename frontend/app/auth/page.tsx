@@ -68,6 +68,16 @@ function AuthContent() {
           router.push("/onboarding");
         }
       } else {
+        // Check if business name is already taken
+        const checkRes = await fetch(`${API_BASE_URL}/api/zernio/profiles/check-name?name=${encodeURIComponent(businessName)}`);
+        if (!checkRes.ok) {
+          throw new Error("Failed to verify business name availability. Please try again.");
+        }
+        const checkData = await checkRes.json();
+        if (checkData.taken) {
+          throw new Error("Business name is already taken. Please choose another name.");
+        }
+
         // Sign up using email/password + metadata
         const { data, error } = await supabase.auth.signUp({
           email,

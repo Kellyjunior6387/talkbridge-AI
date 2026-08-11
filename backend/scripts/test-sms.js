@@ -16,13 +16,12 @@ console.log(`Username:       ${process.env.AFRICASTALKING_USERNAME || 'sandbox'}
 console.log(`API Key:        ${process.env.AFRICASTALKING_API_KEY ? '***' + process.env.AFRICASTALKING_API_KEY.slice(-6) : 'MISSING'}`);
 console.log(`Sender ID:      ${process.env.AFRICASTALKING_SENDER_ID || 'None'}`);
 console.log(`Recipient:      ${process.env.AFRICASTALKING_RECIPIENT || 'None'}`);
-console.log(`Agent Number:   ${process.env.TWILIO_AGENT_NUMBER || 'None'}`);
 console.log('========================================================\n');
 
 async function run() {
-  const recipient = process.env.AFRICASTALKING_RECIPIENT || process.env.TWILIO_AGENT_NUMBER;
+  const recipient = process.env.AFRICASTALKING_RECIPIENT;
   if (!recipient) {
-    console.error('❌ Error: No AFRICASTALKING_RECIPIENT or TWILIO_AGENT_NUMBER configured in .env');
+    console.error('❌ Error: No AFRICASTALKING_RECIPIENT configured in .env');
     process.exit(1);
   }
 

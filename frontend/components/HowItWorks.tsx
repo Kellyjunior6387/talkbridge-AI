@@ -34,7 +34,7 @@ const STEPS: StepItem[] = [
     number: "04",
     title: "ESCALATE",
     icon: BellRing,
-    description: "High-urgency messages (angry customers, viral complaints) trigger an immediate SMS alert to a human agent via Twilio.",
+    description: "High-urgency messages (angry customers, viral complaints) trigger an immediate SMS alert to a human agent via Africa's Talking.",
   },
 ];
 

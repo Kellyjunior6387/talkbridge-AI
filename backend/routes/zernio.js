@@ -10,7 +10,7 @@ import {
   generateMediaUploadLink,
   createProductPost,
 } from '../services/zernio.js';
-import { getRow, listRows, upsertRows, createSignedUploadUrl } from '../services/supabase.js';
+import { getRow, listRows, upsertRows, createSignedUploadUrl, supabase } from '../services/supabase.js';
 import { log } from '../utils/logger.js';
 
 const router = express.Router();
@@ -25,12 +25,60 @@ function normalizePlatforms(input) {
     .filter((platform) => ['instagram', 'tiktok', 'twitter'].includes(platform));
 }
 
+router.get('/profiles/check-name', async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name) {
+      return res.status(400).json({ error: 'name parameter is required' });
+    }
+
+    if (!supabase) {
+      throw new Error('Supabase client is not initialized');
+    }
+
+    // Case-insensitive search
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .ilike('name', name.trim())
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    return res.json({ taken: !!data });
+  } catch (err) {
+    log('error', `[Zernio API] check-name failed: ${err.message}`);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/profiles', async (req, res) => {
   try {
     const { userId, name, description, color } = req.body;
 
     if (!userId || !name) {
       return res.status(400).json({ error: 'userId and name are required' });
+    }
+
+    if (!supabase) {
+      throw new Error('Supabase client is not initialized');
+    }
+
+    // Double check name availability on backend
+    const { data: existing, error: checkError } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .ilike('name', name.trim())
+      .maybeSingle();
+
+    if (checkError) {
+      throw checkError;
+    }
+
+    if (existing) {
+      return res.status(400).json({ error: 'Business name is already taken. Please choose another name.' });
     }
 
     const zernioProfile = await createWorkspaceProfile({ name, description, color });
