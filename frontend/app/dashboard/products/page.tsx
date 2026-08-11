@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "../layout";
 import { API_BASE_URL } from "../../../lib/api";
 import { supabase } from "../../../lib/supabase";
@@ -12,7 +12,8 @@ import {
   Upload, 
   ChevronDown, 
   ChevronUp, 
-  Edit
+  Edit,
+  Loader2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -101,6 +102,25 @@ export default function ProductCataloguePage() {
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
+  // File input ref for image uploading
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // States for Image Uploading
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadProgress, setImageUploadProgress] = useState(0);
+
+  // States for Product Saving Loader
+  const [isSaving, setIsSaving] = useState(false);
+  const [savingStatus, setSavingStatus] = useState("");
+
+  // States for Quick Stock Edit
+  const [quickStockOpen, setQuickStockOpen] = useState(false);
+  const [quickStockProduct, setQuickStockProduct] = useState<Product | null>(null);
+  const [quickStockIndex, setQuickStockIndex] = useState<number>(-1);
+  const [quickStockQty, setQuickStockQty] = useState<number>(0);
+  const [quickStockInStock, setQuickStockInStock] = useState<boolean>(true);
+  const [quickStockSaving, setQuickStockSaving] = useState(false);
+
   const handleOpenPostModal = (product: Product) => {
     router.push(`/dashboard/publish?productId=${product.id}`);
   };
@@ -187,12 +207,125 @@ export default function ProductCataloguePage() {
     );
   };
 
-  // Mock image upload
-  const handleMockUpload = () => {
-    setFormImage("https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=400&q=80");
+  // Handle Real Image Upload to Supabase Storage
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Image must be smaller than 5MB", "error");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    setImageUploadProgress(10);
+    try {
+      // Step 1: Request signed upload url
+      const res = await fetch(`${API_BASE_URL}/api/zernio/media/supabase-upload-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, folder: "products" })
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to get signed upload URL");
+      }
+
+      const { signedUrl, publicUrl } = await res.json();
+      setImageUploadProgress(30);
+
+      // Step 2: Upload using XMLHttpRequest to track progress
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", signedUrl);
+      xhr.setRequestHeader("Content-Type", file.type);
+      
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          // Scale from 30% to 90%
+          setImageUploadProgress(30 + Math.round(percentComplete * 0.6));
+        }
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error during upload"));
+        xhr.send(file);
+      });
+
+      setImageUploadProgress(100);
+      setFormImage(publicUrl);
+      showToast("Product image uploaded successfully!", "success");
+    } catch (err) {
+      console.error("Image upload failed:", err);
+      showToast(`Upload failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      setIsUploadingImage(false);
+      setImageUploadProgress(0);
+      // Reset input value to allow selecting same file again if needed
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   };
 
-  // Save changes via backend API
+  const handleImageClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // Quick stock edit triggering
+  const handleQuickEditStock = (product: Product, sizeIdx: number) => {
+    const sizeItem = product.sizes[sizeIdx];
+    if (!sizeItem) return;
+    setQuickStockProduct(product);
+    setQuickStockIndex(sizeIdx);
+    setQuickStockQty(sizeItem.qty);
+    setQuickStockInStock(sizeItem.inStock);
+    setQuickStockOpen(true);
+  };
+
+  // Save quick stock changes directly to database and update state
+  const handleSaveQuickStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickStockProduct || quickStockIndex === -1) return;
+
+    setQuickStockSaving(true);
+    try {
+      const updatedSizes = quickStockProduct.sizes.map((s, i) => 
+        i === quickStockIndex ? { ...s, qty: quickStockQty, inStock: quickStockInStock } : s
+      );
+
+      const { error } = await supabase
+        .from("products")
+        .update({ sizes: updatedSizes })
+        .eq("id", quickStockProduct.id);
+
+      if (error) throw error;
+
+      // Update local state instantly for optimal UX
+      setProducts(prev => prev.map(p => 
+        p.id === quickStockProduct.id ? { ...p, sizes: updatedSizes } : p
+      ));
+
+      showToast(`Stock for size ${quickStockProduct.sizes[quickStockIndex].size} updated successfully!`, "success");
+      setQuickStockOpen(false);
+    } catch (err) {
+      console.error("Failed to update stock:", err);
+      showToast(`Failed to update stock: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      setQuickStockSaving(false);
+    }
+  };
+
+  // Save changes via backend API (with loaders and progress notification)
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) {
@@ -204,6 +337,8 @@ export default function ProductCataloguePage() {
       return;
     }
 
+    setIsSaving(true);
+    setSavingStatus(isEditing ? "Updating product details..." : "Generating product instructions via AI...");
     const priceNum = parseFloat(formPrice) || 0;
     try {
       if (isEditing && editingId) {
@@ -249,6 +384,9 @@ export default function ProductCataloguePage() {
     } catch (err) {
       console.error(err);
       showToast(`Error saving product: ${err instanceof Error ? err.message : String(err)}`, "error");
+    } finally {
+      setIsSaving(false);
+      setSavingStatus("");
     }
   };
 
@@ -321,16 +459,19 @@ export default function ProductCataloguePage() {
                 {/* Sizes Row */}
                 <div className="flex flex-wrap gap-1">
                   {product.sizes.map((sz, idx) => (
-                    <span
+                    <button
                       key={idx}
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                      type="button"
+                      onClick={() => handleQuickEditStock(product, idx)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all hover:scale-105 border ${
                         sz.inStock 
-                          ? "bg-slate-50 text-slate-700 border border-slate-200" 
-                          : "bg-red-50 text-red-500/80 line-through border border-red-100"
+                          ? "bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-600 border-slate-200 hover:border-blue-300" 
+                          : "bg-red-50 hover:bg-red-100 text-red-550/80 hover:text-red-650 line-through border-red-100 hover:border-red-200"
                       }`}
+                      title="Click to quick update stock"
                     >
                       {sz.size} {sz.qty > 0 && `×${sz.qty}`}
-                    </span>
+                    </button>
                   ))}
                 </div>
 
@@ -544,12 +685,28 @@ export default function ProductCataloguePage() {
               {/* Image Uploader */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Product image</label>
-                {formImage ? (
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleImageChange} 
+                  accept="image/*" 
+                  className="hidden" 
+                />
+                {isUploadingImage ? (
+                  <div className="border border-slate-200 rounded-lg p-5 flex flex-col items-center justify-center gap-2 bg-slate-50">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                    <span className="text-xs font-semibold text-slate-700">Uploading image... {imageUploadProgress}%</span>
+                    <div className="w-full bg-slate-200 rounded-full h-1.5 mt-1">
+                      <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${imageUploadProgress}%` }}></div>
+                    </div>
+                  </div>
+                ) : formImage ? (
                   <div className="relative rounded-lg border border-slate-200 overflow-hidden h-28 flex items-center justify-center bg-slate-50">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={formImage} alt="Preview" className="h-full object-contain" />
                     <button
                       type="button"
+                      disabled={isSaving}
                       onClick={() => setFormImage(null)}
                       className="absolute top-2 right-2 p-1 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors shadow-md"
                     >
@@ -558,7 +715,7 @@ export default function ProductCataloguePage() {
                   </div>
                 ) : (
                   <div 
-                    onClick={handleMockUpload}
+                    onClick={handleImageClick}
                     className="border border-dashed border-slate-200 hover:border-blue-600/50 rounded-lg p-5 text-center cursor-pointer bg-slate-50 hover:bg-slate-100/50 transition-all flex flex-col items-center gap-1"
                   >
                     <Upload size={18} className="text-slate-455" />
@@ -592,23 +749,119 @@ export default function ProductCataloguePage() {
                 )}
               </div>
 
-              {/* Buttons */}
-              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 -mx-6 -mb-6 p-6 rounded-b-2xl">
+              {/* Buttons / Loader */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 -mx-6 -mb-6 p-6 rounded-b-2xl">
+                {isSaving ? (
+                  <div className="flex items-center gap-2 text-blue-600">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="text-xs font-semibold">{savingStatus || "Processing..."}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-end gap-3 w-full">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => setModalOpen(false)}
+                      className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-display font-bold text-xs tracking-wide rounded-full transition-all hover:shadow-[0_4px_12px_rgba(37,99,235,0.25)]"
+                    >
+                      {isEditing ? "Save Changes" : "Save Product"}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK STOCK EDIT MODAL */}
+      {quickStockOpen && quickStockProduct && quickStockIndex !== -1 && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-[360px] shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+              <h2 className="font-display font-bold text-sm text-slate-900">
+                Update Stock: {quickStockProduct.name}
+              </h2>
+              <button 
+                onClick={() => setQuickStockOpen(false)}
+                className="text-slate-400 hover:text-slate-800 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveQuickStock} className="p-5 space-y-4">
+              <div className="text-xs text-slate-500 font-medium">
+                Adjusting inventory for size: <span className="font-bold text-slate-800">{quickStockProduct.sizes[quickStockIndex].size}</span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Quantity</label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={quickStockQty}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setQuickStockQty(val);
+                    if (val === 0) {
+                      setQuickStockInStock(false);
+                    } else {
+                      setQuickStockInStock(true);
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:border-blue-600 font-bold"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs font-semibold text-slate-700">Availability Status</span>
                 <button
                   type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-all"
+                  onClick={() => setQuickStockInStock(!quickStockInStock)}
+                  className={`px-3 py-1 rounded text-xs font-mono font-bold border transition-colors ${
+                    quickStockInStock 
+                      ? "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100" 
+                      : "bg-red-50 text-red-500 border-red-200 hover:bg-red-100"
+                  }`}
+                >
+                  {quickStockInStock ? "IN STOCK" : "OUT OF STOCK"}
+                </button>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={quickStockSaving}
+                  onClick={() => setQuickStockOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-all disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-display font-bold text-xs tracking-wide rounded-full transition-all hover:shadow-[0_4px_12px_rgba(37,99,235,0.25)]"
+                  disabled={quickStockSaving}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-display font-bold text-xs tracking-wide rounded-lg transition-all hover:shadow-[0_4px_12px_rgba(37,99,235,0.2)] disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  Save Product
+                  {quickStockSaving ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Save Stock"
+                  )}
                 </button>
               </div>
-
             </form>
           </div>
         </div>

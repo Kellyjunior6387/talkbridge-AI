@@ -8,10 +8,17 @@ import { API_BASE_URL } from "../../lib/api";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState("Threads Kenya");
   const [profileId, setProfileId] = useState("");
-  const [connectedAccounts, setConnectedAccounts] = useState<any[]>([]);
+
+  interface ConnectedAccount {
+    _id?: string;
+    id?: string;
+    platform: string;
+    username?: string;
+  }
+
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
   const [isConnectingPlat, setIsConnectingPlat] = useState<string | null>(null);
 
   // Connections state (WhatsApp and Zernio are handled locally/mock, Instagram and TikTok are real backend)
@@ -33,8 +40,8 @@ export default function OnboardingPage() {
         // Sync connections with actual backend connections
         setConnections(prev => ({
           ...prev,
-          instagram: list.some((acc: any) => acc.platform === "instagram"),
-          tiktok: list.some((acc: any) => acc.platform === "tiktok")
+          instagram: list.some((acc: ConnectedAccount) => acc.platform === "instagram"),
+          tiktok: list.some((acc: ConnectedAccount) => acc.platform === "tiktok")
         }));
       }
     } catch (err) {
@@ -102,7 +109,6 @@ export default function OnboardingPage() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mounted) return;
       if (session) {
-        setUserId(session.user.id);
         const meta = session.user.user_metadata || {};
         setBusinessName(meta.business_name || meta.full_name || "Threads Kenya");
 
