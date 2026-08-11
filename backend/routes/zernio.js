@@ -202,14 +202,14 @@ router.post('/media/upload-link', async (req, res) => {
 
 router.post('/media/supabase-upload-link', async (req, res) => {
   try {
-    const { filename } = req.body;
+    const { filename, folder = 'videos' } = req.body;
     if (!filename) {
       return res.status(400).json({ error: 'filename is required' });
     }
 
     const fileExt = filename.split('.').pop();
     const uniqueName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-    const filePath = `videos/${uniqueName}`;
+    const filePath = `${folder}/${uniqueName}`;
 
     const data = await createSignedUploadUrl(filePath);
 
